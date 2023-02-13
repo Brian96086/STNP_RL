@@ -1,0 +1,27 @@
+DIR: 
+  exp: "testYaml"
+  snapshot: "/Users/brian96086/Documents/DSC180/RL_Opt_Replication/ckpt"
+
+SIMULATOR:
+  population: 100000
+  node_count: 100
+  num_days: 101
+  num_simulations: 30
+  init_infected: 2000
+  init_exposed: 2000
+  
+
+MODEL:
+  backbone: "deepQ"
+
+TRAIN:
+  episode: 100
+  resume: "checkpoint_000000"
+  stnp_epoch: 20000
+  train_iter: 8
+  
+
+VAL:
+  resume: "checkpoint_000000"
+  evaluate_only: False
+  visualization: False
