@@ -4,7 +4,6 @@ DIR:
 
 SIMULATOR:
   population: 100000
-  node_count: 100
   num_days: 101
   num_simulations: 30
   init_infected: 2000

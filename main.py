@@ -18,12 +18,12 @@ import argparse
 import os
 from config import cfg 
 from src.seir import seir
+from src.dcrnn import DCRNNModel
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 device = torch.device("cpu")
-
-
 large = 25; med = 19; small = 12
 params = {'axes.titlesize': large,
           'legend.fontsize': 20,
@@ -34,142 +34,12 @@ params = {'axes.titlesize': large,
           'figure.titlesize': med}
 plt.rcParams.update(params)
 
-"""# generate y ( sequence) using SEIR model:"""
 
 
-
-
-"""# CNP"""
-
-#reference: https://chrisorm.github.io/NGP.html
-class REncoder(torch.nn.Module):
-    """Encodes inputs of the form (x_i,y_i) into representations, r_i."""
-    
-    def __init__(self, in_dim, out_dim, init_func = torch.nn.init.normal_):
-        super(REncoder, self).__init__()
-        self.l1_size = 16 #16
-        self.l2_size = 8 #8
-        
-        self.l1 = torch.nn.Linear(in_dim, self.l1_size)
-        self.l2 = torch.nn.Linear(self.l1_size, self.l2_size)
-        self.l3 = torch.nn.Linear(self.l2_size, out_dim)
-        self.a1 = torch.nn.Sigmoid()
-        self.a2 = torch.nn.Sigmoid()
-        
-        if init_func is not None:
-            init_func(self.l1.weight)
-            init_func(self.l2.weight)
-            init_func(self.l3.weight)
-        
-    def forward(self, inputs):
-        return self.l3(self.a2(self.l2(self.a1(self.l1(inputs)))))
-
-class ZEncoder(torch.nn.Module):
-    """Takes an r representation and produces the mean & standard deviation of the 
-    normally distributed function encoding, z."""
-    def __init__(self, in_dim, out_dim, init_func=torch.nn.init.normal_):
-        super(ZEncoder, self).__init__()
-        self.m1_size = out_dim
-        self.logvar1_size = out_dim
-        
-        self.m1 = torch.nn.Linear(in_dim, self.m1_size)
-        self.logvar1 = torch.nn.Linear(in_dim, self.m1_size)
-
-        if init_func is not None:
-            init_func(self.m1.weight)
-            init_func(self.logvar1.weight)
-        
-    def forward(self, inputs):
-        
-
-        return self.m1(inputs), self.logvar1(inputs)
-    
-class Decoder(torch.nn.Module):
-    """
-    Takes the x star points, along with a 'function encoding', z, and makes predictions.
-    """
-    def __init__(self, in_dim, out_dim, init_func=torch.nn.init.normal_):
-        super(Decoder, self).__init__()
-        self.l1_size = 8 #8
-        self.l2_size = 16 #16
-        
-        self.l1 = torch.nn.Linear(in_dim, self.l1_size)
-        self.l2 = torch.nn.Linear(self.l1_size, self.l2_size)
-        self.l3 = torch.nn.Linear(self.l2_size, out_dim)
-        
-        if init_func is not None:
-            init_func(self.l1.weight)
-            init_func(self.l2.weight)
-            init_func(self.l3.weight)
-        
-        self.a1 = torch.nn.Sigmoid()
-        self.a2 = torch.nn.Sigmoid()
-        
-    def forward(self, x_pred, z):
-        """x_pred: No. of data points, by x_dim
-        z: No. of samples, by z_dim
-        """
-        zs_reshaped = z.unsqueeze(-1).expand(z.shape[0], x_pred.shape[0]).transpose(0,1)
-        xpred_reshaped = x_pred
-        
-        xz = torch.cat([xpred_reshaped, zs_reshaped], dim=1)
-
-        return self.l3(self.a2(self.l2(self.a1(self.l1(xz))))).squeeze(-1)
 
 def MAE(pred, target):
     loss = torch.abs(pred-target)
     return loss.mean()
-
-class DCRNNModel(nn.Module):
-    def __init__(self, x_dim, y_dim, r_dim, z_dim, init_func=torch.nn.init.normal_):
-        super().__init__()
-        self.repr_encoder = REncoder(x_dim+y_dim, r_dim) # (x,y)->r
-        self.z_encoder = ZEncoder(r_dim, z_dim) # r-> mu, logvar
-        self.decoder = Decoder(x_dim+z_dim, y_dim) # (x*, z) -> y*
-        self.z_mu_all = 0
-        self.z_logvar_all = 0
-        self.z_mu_context = 0
-        self.z_logvar_context = 0
-        self.zs = 0
-        self.zdim = z_dim
-    
-    def data_to_z_params(self, x, y):
-        """Helper to batch together some steps of the process."""
-        xy = torch.cat([x,y], dim=1)
-        rs = self.repr_encoder(xy)
-        r_agg = rs.mean(dim=0) # Average over samples
-        return self.z_encoder(r_agg) # Get mean and variance for q(z|...)
-    
-    def sample_z(self, mu, logvar,n=1):
-        """Reparameterisation trick."""
-        if n == 1:
-            eps = torch.autograd.Variable(logvar.data.new(self.z_dim).normal_()).to(device)
-        else:
-            eps = torch.autograd.Variable(logvar.data.new(n,self.z_dim).normal_()).to(device)
-        
-        # std = torch.exp(0.5 * logvar)
-        std = 0.1+ 0.9*torch.sigmoid(logvar)
-        return mu + std * eps
-
-    def KLD_gaussian(self):
-        """Analytical KLD between 2 Gaussians."""
-        mu_q, logvar_q, mu_p, logvar_p = self.z_mu_all, self.z_logvar_all, self.z_mu_context, self.z_logvar_context
-
-        std_q = 0.1+ 0.9*torch.sigmoid(logvar_q)
-        std_p = 0.1+ 0.9*torch.sigmoid(logvar_p)
-        p = torch.distributions.Normal(mu_p, std_p)
-        q = torch.distributions.Normal(mu_q, std_q)
-        return torch.distributions.kl_divergence(p, q).sum()
-        
-
-    def forward(self, x_t, x_c, y_c, x_ct, y_ct):
-        """
-        """
-        
-        self.z_mu_all, self.z_logvar_all = self.data_to_z_params(x_ct, y_ct)
-        self.z_mu_context, self.z_logvar_context = self.data_to_z_params(x_c, y_c)
-        self.zs = self.sample_z(self.z_mu_all, self.z_logvar_all)
-        return self.decoder(x_t, self.zs)
 
 def random_split_context_target(x,y, n_context):
     """Helper function to split randomly into context and target"""
@@ -187,20 +57,20 @@ def sample_z(mu, logvar,z_dim, n=1):
     std = 0.1+ 0.9*torch.sigmoid(logvar)
     return mu + std * eps
 
-def data_to_z_params(x, y):
+def data_to_z_params(dcrnn, x, y):
     """Helper to batch together some steps of the process."""
     xy = torch.cat([x,y], dim=1)
     rs = dcrnn.repr_encoder(xy)
     r_agg = rs.mean(dim=0) # Average over samples
     return dcrnn.z_encoder(r_agg) # Get mean and variance for q(z|...)
 
-def test(dcrnn, x_train, y_train, x_test):
+def test(dcrnn, x_train, y_train, x_test, z_dim):
     with torch.no_grad():
-      z_mu, z_logvar = data_to_z_params(x_train.to(device),y_train.to(device))
+      z_mu, z_logvar = data_to_z_params(dcrnn, x_train.to(device),y_train.to(device))
       
       output_list = []
       for i in range (len(x_test)):
-          zsamples = sample_z(z_mu, z_logvar) 
+          zsamples = sample_z(z_mu, z_logvar, z_dim) 
           output = dcrnn.decoder(x_test[i:i+1].to(device), zsamples).cpu()
           output_list.append(output.detach().numpy())
     
@@ -247,13 +117,12 @@ def train(dcrnn, opt, n_epochs, x_train, y_train, x_val, y_val, x_test, y_test, 
         
         #val loss
         y_val_pred = test(dcrnn, torch.from_numpy(x_train).float(),torch.from_numpy(y_train).float(),
-                      torch.from_numpy(x_val).float())
+                      torch.from_numpy(x_val).float(), cfg.MODEL.z_dim)
         val_loss = N * MAE(torch.from_numpy(y_val_pred).float(),torch.from_numpy(y_val).float())/100
         #test loss
         y_test_pred = test(dcrnn, torch.from_numpy(x_train).float(),torch.from_numpy(y_train).float(),
-                      torch.from_numpy(x_test).float())
+                      torch.from_numpy(x_test).float(), cfg.MODEL.z_dim)
         test_loss = N * MAE(torch.from_numpy(y_test_pred).float(),torch.from_numpy(y_test).float())/100
-
         if t % n_display ==0:
             print('train loss:', train_loss.item(), 'mae:', mae_loss.item(), 'kld:', kld_loss.item())
             print('val loss:', val_loss.item(), 'test loss:', test_loss.item())
@@ -399,38 +268,39 @@ def MAE_MX(y_pred, y_test):
     return mae_matrix, mae
 
 def main(args):
-
     num_days = cfg.SIMULATOR.num_days
     num_simulations = cfg.SIMULATOR.num_simulations
-    beta = np.repeat(np.expand_dims(np.linspace(1.1, 4.0, 30),1),9,1)
-    epsilon = np.repeat(np.expand_dims(np.linspace(0.25, 0.65, 9),0),30,0)
+
+    [b_low, b_high, b_step], [e_low, e_high, e_step] = cfg.SIMULATOR.train_param
+    beta = np.repeat(np.expand_dims(np.linspace(b_low, b_high, b_step),1),e_step,1) #1.1, 4.0, 30
+    epsilon = np.repeat(np.expand_dims(np.linspace(e_low, e_high, e_step),0),b_step,0) #0.25, 0.65, 9
     beta_epsilon = np.stack([beta,epsilon],-1)
     beta_epsilon_train = beta_epsilon.reshape(-1,2)
 
-    beta = np.repeat(np.expand_dims(np.linspace(1.14, 3.88, 5),1),3,1)
-    epsilon = np.repeat(np.expand_dims(np.linspace(0.29, 0.59, 3),0),5,0)
+    [b_low, b_high, b_step], [e_low, e_high, e_step] = cfg.SIMULATOR.val_param
+    beta = np.repeat(np.expand_dims(np.linspace(b_low, b_high, b_step),1),e_step,1) #1.14, 3.88, 5
+    epsilon = np.repeat(np.expand_dims(np.linspace(e_low, e_high, e_step),0),b_step,0) #0.29, 0.59, 3
     beta_epsilon = np.stack([beta,epsilon],-1)
     beta_epsilon_val = beta_epsilon.reshape(-1,2)
 
-    beta = np.repeat(np.expand_dims(np.linspace(1.24, 3.98, 5),1),3,1)
-    epsilon = np.repeat(np.expand_dims(np.linspace(0.31, 0.61, 3),0),5,0)
+    [b_low, b_high, b_step], [e_low, e_high, e_step] = cfg.SIMULATOR.test_param
+    beta = np.repeat(np.expand_dims(np.linspace(b_low, b_high, b_step),1),e_step,1) #1.24, 3.98, 5
+    epsilon = np.repeat(np.expand_dims(np.linspace(e_low, e_high, e_step),0),b_step,0) #0.31, 0.61, 3
     beta_epsilon = np.stack([beta,epsilon],-1)
     beta_epsilon_test = beta_epsilon.reshape(-1,2)
 
-
     beta_epsilon_all = beta_epsilon_train
-    yall_set, yall_mean, yall_std = seir(num_days,beta_epsilon_all,num_simulations)
-    y_all = yall_set.reshape(-1,100)
+    yall_set, yall_mean, yall_std = seir(num_days,beta_epsilon_all,num_simulations, cfg)
+    y_all = yall_set.reshape(-1,num_days-1)
     x_all = np.repeat(beta_epsilon_all,num_simulations,axis =0)
 
-
-    yval_set, yval_mean, yval_std = seir(num_days,beta_epsilon_val,num_simulations)
-    y_val = yval_set.reshape(-1,100)
+    yval_set, yval_mean, yval_std = seir(num_days,beta_epsilon_val,num_simulations, cfg)
+    y_val = yval_set.reshape(-1,num_days-1)
     x_val = np.repeat(beta_epsilon_val,num_simulations,axis =0)
 
 
-    ytest_set, ytest_mean, ytest_std = seir(num_days,beta_epsilon_test,num_simulations)
-    y_test = ytest_set.reshape(-1,100)
+    ytest_set, ytest_mean, ytest_std = seir(num_days,beta_epsilon_test,num_simulations, cfg)
+    y_test = ytest_set.reshape(-1, num_days-1)
     x_test = np.repeat(beta_epsilon_test,num_simulations,axis =0)
 
     np.random.seed(3)
@@ -460,7 +330,7 @@ def main(args):
 
     for seed in range(1,3): #3
         np.random.seed(seed)
-        dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim).to(device)
+        dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
         opt = torch.optim.Adam(dcrnn.parameters(), cfg.MODEL.lr) #1e-3
 
         y_pred_test_list = []
@@ -483,8 +353,8 @@ def main(args):
 
             start_time = time.time()
             train_losses, val_losses, test_losses, z_mu, z_logvar = train(
-                dcrnn, opt, cfg.MODEL.stnp_epoch ,x_train,
-                y_train,x_val, y_val, x_test, y_test,500, 1500
+                dcrnn, opt, cfg.TRAIN.stnp_epoch ,x_train,
+                y_train,x_val, y_val, x_test, y_test,cfg.TRAIN.n_display, cfg.TRAIN.patience,
             ) #20000, 5000
             end_time = time.time()
             print('train time = {}'.format(end_time - start_time))
@@ -552,23 +422,23 @@ def main(args):
     score_arr = np.stack(score_set,0)
     mask_arr = np.stack(mask_set,0)
 
-    np.save('mae_testarr.npy',mae_testarr)
-    np.save('mae_allarr.npy',mae_allarr)
-    np.save('maemetrix_allarr.npy',maemetrix_allarr)
+    # np.save('mae_testarr.npy',mae_testarr)
+    # np.save('mae_allarr.npy',mae_allarr)
+    # np.save('maemetrix_allarr.npy',maemetrix_allarr)
 
-    np.save('score_arr.npy',score_arr)
-    np.save('mask_arr.npy',mask_arr)
+    # np.save('score_arr.npy',score_arr)
+    # np.save('mask_arr.npy',mask_arr)
 
-    np.save('y_pred_all_arr.npy',ypred_allarr)
-    np.save('y_pred_test_arr.npy',ypred_testarr)
+    # np.save('y_pred_all_arr.npy',ypred_allarr)
+    # np.save('y_pred_test_arr.npy',ypred_testarr)
 
-    np.save('y_all.npy',y_all)
-    np.save('y_test.npy',y_test)
+    # np.save('y_all.npy',y_all)
+    # np.save('y_test.npy',y_test)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
-        description="DeepQ network with SEIR"
+        description="STNP network with RL"
     )
     parser.add_argument(
         "--cfg",

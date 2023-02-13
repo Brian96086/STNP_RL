@@ -1,4 +1,6 @@
 {
     "dockerhub-id": "brian9wang/stnp_rl:latest",
-    "build-script": "python3 main.py test"
+    "build-script": "python3 main.py test",
+    "DockerHub Repository": "brian9wang/stnp_rl",
+    "GitHub Repository": "https://github.com/Brian96086/STNP_RL.git",
 }

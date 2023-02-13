@@ -14,9 +14,13 @@ _C.SIMULATOR.sim_type = "naive_seir"
 _C.SIMULATOR.population = 100000
 _C.SIMULATOR.num_days = 101
 _C.SIMULATOR.num_simulations = 30
-_C.SIMULATOR.init_infected: 2000
-_C.SIMULATOR.init_exposed: 2000
-
+_C.SIMULATOR.init_infected = 2000
+_C.SIMULATOR.init_exposed = 2000
+#beta list of train, val, test 
+# stored as ((beta_low, beta_high, beta_step), (ep_low, ep_high, ep_step)
+_C.SIMULATOR.train_param = [[1.1, 4.0, 30],[0.25, 0.65, 9]]
+_C.SIMULATOR.val_param = [[1.14, 3.88, 5],[0.29, 0.59, 3]]
+_C.SIMULATOR.test_param = [[1.24, 3.98, 5],[0.31, 0.61, 3]]
 # -----------------------------------------------------------------------------
 # FILES
 # -----------------------------------------------------------------------------
@@ -60,6 +64,8 @@ _C.TRAIN.stnp_epoch = 20000
 _C.TRAIN.train_iter = 8
 # iterations of each epoch (irrelevant to batch size)
 _C.TRAIN.epoch_iters = 5000
+_C.TRAIN.n_display = 500
+_C.TRAIN.patience = 5000
 # optimizer and learning rate
 _C.TRAIN.optimizer = "AdamW"
 _C.TRAIN.lr_backbone = 0.01
