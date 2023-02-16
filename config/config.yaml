@@ -18,6 +18,9 @@ TRAIN:
   resume: "checkpoint_000000"
   stnp_epoch: 20000
   train_iter: 8
+  epoch_iters: 500
+  n_display: 500
+  patience: 5000
   
 
 VAL:

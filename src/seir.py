@@ -72,3 +72,47 @@ def seir (num_days, beta_epsilon_flatten, num_simulations, cfg):
     train_stdset = np.stack(train_std_list,0)
     train_set = np.stack(train_list,0)
     return train_set, train_meanset, train_stdset
+
+def build_dataset(cfg):
+
+    num_days = cfg.SIMULATOR.num_days
+    num_simulations = cfg.SIMULATOR.num_simulations
+
+    [b_low, b_high, b_step], [e_low, e_high, e_step] = cfg.SIMULATOR.train_param
+    beta = np.repeat(np.expand_dims(np.linspace(b_low, b_high, b_step),1),e_step,1) #1.1, 4.0, 30
+    epsilon = np.repeat(np.expand_dims(np.linspace(e_low, e_high, e_step),0),b_step,0) #0.25, 0.65, 9
+    beta_epsilon = np.stack([beta,epsilon],-1)
+    beta_epsilon_train = beta_epsilon.reshape(-1,2)
+
+    [b_low, b_high, b_step], [e_low, e_high, e_step] = cfg.SIMULATOR.val_param
+    beta = np.repeat(np.expand_dims(np.linspace(b_low, b_high, b_step),1),e_step,1) #1.14, 3.88, 5
+    epsilon = np.repeat(np.expand_dims(np.linspace(e_low, e_high, e_step),0),b_step,0) #0.29, 0.59, 3
+    beta_epsilon = np.stack([beta,epsilon],-1)
+    beta_epsilon_val = beta_epsilon.reshape(-1,2)
+
+    [b_low, b_high, b_step], [e_low, e_high, e_step] = cfg.SIMULATOR.test_param
+    beta = np.repeat(np.expand_dims(np.linspace(b_low, b_high, b_step),1),e_step,1) #1.24, 3.98, 5
+    epsilon = np.repeat(np.expand_dims(np.linspace(e_low, e_high, e_step),0),b_step,0) #0.31, 0.61, 3
+    beta_epsilon = np.stack([beta,epsilon],-1)
+    beta_epsilon_test = beta_epsilon.reshape(-1,2)
+
+    beta_epsilon_all = beta_epsilon_train
+    yall_set, yall_mean, yall_std = seir(num_days,beta_epsilon_all,num_simulations, cfg)
+    y_all = yall_set.reshape(-1,num_days-1)
+    x_all = np.repeat(beta_epsilon_all,num_simulations,axis =0)
+
+    yval_set, yval_mean, yval_std = seir(num_days,beta_epsilon_val,num_simulations, cfg)
+    y_val = yval_set.reshape(-1,num_days-1)
+    x_val = np.repeat(beta_epsilon_val,num_simulations,axis =0)
+
+
+    ytest_set, ytest_mean, ytest_std = seir(num_days,beta_epsilon_test,num_simulations, cfg)
+    y_test = ytest_set.reshape(-1, num_days-1)
+    x_test = np.repeat(beta_epsilon_test,num_simulations,axis =0)
+
+    scenario_list = [beta_epsilon_all, beta_epsilon_train, beta_epsilon_val, beta_epsilon_test]
+    training_data = [x_all, yall_set, y_all]
+    validation_data = [x_val, yval_set, y_val]
+    test_data = [x_test, ytest_set, y_test]
+    output_list = scenario_list, training_data, validation_data, test_data
+    return output_list
