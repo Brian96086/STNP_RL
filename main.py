@@ -75,20 +75,18 @@ def main(args):
         # selected_mask = init()
         selected_mask = np.copy(mask_init)
         #import ipdb;ipdb.set_trace()
+
+        
         
         for i in range(cfg.TRAIN.train_iter): #8
             # print('selected_mask:', selected_mask)
             print('i = {}, x_train shape = {}, y_train shape = {}, '.format(i, x_train.shape, y_train.shape))
             mask_list.append(np.copy(selected_mask))
 
-            start_time = time.time()
             train_losses, val_losses, test_losses, z_mu, z_logvar = train(
                 dcrnn, opt, cfg, cfg.TRAIN.stnp_epoch ,x_train,
                 y_train,x_val, y_val, x_test, y_test,cfg.TRAIN.n_display, cfg.TRAIN.patience,
             ) #20000, 5000
-            end_time = time.time()
-            print('train time = {}'.format(end_time - start_time))
-
             start_time = time.time()
             y_pred_test = test(dcrnn, torch.from_numpy(x_train).float(),torch.from_numpy(y_train).float(),
                             torch.from_numpy(x_test).float(), cfg.MODEL.z_dim)
@@ -107,8 +105,7 @@ def main(args):
             mae_matrix, mae = MAE_MX(y_pred_all, y_all)
             end_time = time.time()
             print('test time on all = {}'.format(end_time - start_time))
-            
-            
+        
             all_mae_matrix_list.append(mae_matrix)
             all_mae_list.append(mae)
             print('All MAE:',mae)
@@ -124,7 +121,7 @@ def main(args):
             score_plot(score_array, selected_mask, seed, i)
 
             start_time = time.time()
-            x_train, y_train, selected_mask = select_data(x_train, y_train, beta_epsilon_all, yall_set, score_array, selected_mask)
+            x_train, y_train, selected_mask = select_data(cfg, x_train, y_train, beta_epsilon_all, yall_set, score_array, selected_mask)
             end_time = time.time()
             print('data selection = {}'.format(end_time - start_time))
 
