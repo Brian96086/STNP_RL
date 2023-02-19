@@ -2,6 +2,8 @@ import copy
 import random
 import pickle
 import os
+import gym
+from gym import wrappers
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -18,6 +20,7 @@ class Trainer(object):
     def run_games_for_agents(self):
         """Run a set of games for each agent. Optionally visualising and/or saving the results"""
         self.results = self.create_object_to_store_results()
+        #iterate through every agent, where each agent executes its own simulations and updates independently
         for agent_number, agent_class in enumerate(self.agents):
             agent_name = "DQN_{}".format(agent_number)
             self.run_games_for_agent(agent_number, agent_class)
@@ -57,7 +60,7 @@ class Trainer(object):
             self.environment_name = agent.environment_title
             print(agent.hyperparameters)
             print("RANDOM SEED " , agent_config.seed)
-            game_scores, rolling_scores, time_taken = agent.run_n_episodes()
+            game_scores, rolling_scores, time_taken = agent.run_n_episodes(self.agents[:agent_number]+self.agents[agent_number+1:])
             print("Time taken: {}".format(time_taken), flush=True)
             self.print_two_empty_lines()
             agent_results.append([game_scores, rolling_scores, len(rolling_scores), -1 * max(rolling_scores), time_taken])

@@ -19,7 +19,10 @@ import os
 from config import cfg 
 from src.seir import build_dataset
 from src.dcrnn import DCRNNModel
-from engine import test, train, calculate_score, mae_plot, MAE, score_plot, select_data, MAE_MX
+from utils.agents.DQN import DQN
+from utils.env.environment import Game
+from engine import test, train, train_DQN,calculate_score, mae_plot, MAE, score_plot, select_data, MAE_MX
+import utils 
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -58,10 +61,25 @@ def main(args):
     score_set = []
     mask_set = []
 
-    for seed in range(1,3): #3
+    for seed in range(1,2): #3
         np.random.seed(seed)
-        dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
-        opt = torch.optim.Adam(dcrnn.parameters(), cfg.MODEL.lr) #1e-3
+        config = build_config_dict(cfg, num_actions=len(beta_epsilon_all))
+        x_train,y_train = x_train_init, y_train_init
+        #Stage 0: temp STNP model generates data 
+        temp_dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
+        temp_opt = torch.optim.Adam(temp_dcrnn.parameters(), cfg.MODEL.lr) #1e-3
+        train_losses, val_losses, test_losses, z_mu, z_logvar, scenario_dict = train(
+                temp_dcrnn, temp_opt, cfg, cfg.TRAIN.stnp_epoch/5 ,x_train,
+                y_train,x_val, y_val, x_test, y_test,cfg.TRAIN.n_display, cfg.TRAIN.patience,
+        )
+        env = Game(cfg = cfg, action_space = beta_epsilon_all, scenario_dict = scenario_dict)
+        dqn = DQN(config, cfg, env)
+        train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, epochs = 300)
+        exit()
+
+
+        
+
 
         y_pred_test_list = []
         y_pred_all_list = []
@@ -70,13 +88,13 @@ def main(args):
         test_mae_list = []
         score_list = []
         mask_list = []
-
-        x_train,y_train = x_train_init, y_train_init
         # selected_mask = init()
         selected_mask = np.copy(mask_init)
-        #import ipdb;ipdb.set_trace()
 
         
+        #Stage1: Let dqn select data for dcrnn
+        dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
+        opt = torch.optim.Adam(dcrnn.parameters(), cfg.MODEL.lr) #1e-3
         
         for i in range(cfg.TRAIN.train_iter): #8
             # print('selected_mask:', selected_mask)
@@ -162,6 +180,66 @@ def main(args):
     # np.save('y_all.npy',y_all)
     # np.save('y_test.npy',y_test)
 
+class Config(object):
+    """Object to hold the config requirements for an agent/game"""
+    def __init__(self):
+        self.seed = None
+        self.environment = None
+        self.requirements_to_solve_game = None
+        self.num_episodes_to_run = None
+        self.file_to_save_data_results = None
+        self.file_to_save_results_graph = None
+        self.runs_per_agent = None
+        self.visualise_overall_results = None
+        self.visualise_individual_results = None
+        self.hyperparameters = None
+        self.use_GPU = None
+        self.overwrite_existing_results_file = None
+        self.save_model = False
+        self.standard_deviation_results = 1.0
+        self.randomise_random_seed = True
+        self.show_solution_score = False
+        self.debug_mode = False
+
+def build_config_dict(cfg, num_actions):
+
+    config = Config()
+    config.seed = 1
+    config.num_episodes_to_run = cfg.TRAIN.episode
+    config.file_to_save_data_results = "results/"
+    config.file_to_save_results_graph = "results/"
+    config.show_solution_score = False
+    config.visualise_individual_results = False
+    config.visualise_overall_agent_results = True
+    config.standard_deviation_results = 1.0
+    config.runs_per_agent = 1
+    config.use_GPU = False
+    config.overwrite_existing_results_file = False
+    config.randomise_random_seed = True
+    config.save_model = True
+    config.action_size = num_actions
+    config.state_size = 100
+
+    config.hyperparameters = {
+        "learning_rate": cfg.TRAIN.dqn_lr,
+        "batch_size": cfg.TRAIN.batch_size,
+        "buffer_size": cfg.TRAIN.buffer_size,
+        "epsilon": cfg.TRAIN.epsilon,
+        "epsilon_decay_rate_denominator": cfg.TRAIN.epsilon_decay_rate_denominator,
+        "discount_rate": cfg.TRAIN.discount_rate,
+        "tau": cfg.TRAIN.tau,
+        "alpha_prioritised_replay": cfg.TRAIN.alpha_prioritised_replay,
+        "beta_prioritised_replay": cfg.TRAIN.beta_prioritised_replay,
+        "incremental_td_error": cfg.TRAIN.incremental_td_error,
+        "update_every_n_steps": cfg.TRAIN.update_every_n_steps,
+        "linear_hidden_units": cfg.TRAIN.linear_hidden_units,
+        "final_layer_activation": cfg.TRAIN.final_layer_activation,
+        "batch_norm": cfg.TRAIN.batch_norm,
+        "gradient_clipping_norm": cfg.TRAIN.gradient_clipping_norm,
+        "learning_iterations": cfg.TRAIN.learning_iterations,
+        "clip_rewards": cfg.TRAIN.clip_rewards,
+    }
+    return config
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
@@ -190,4 +268,3 @@ if __name__ == '__main__':
         f.write("{}".format(cfg))
 
     main(cfg)
-

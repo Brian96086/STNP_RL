@@ -6,22 +6,22 @@ import numpy as np
 import torch
 import time
 from torch.optim import optimizer
-from utils.env.environment import Game
+from models.oldGame import Game
 
 class Base_Agent(object):
 
-    def __init__(self, config, cfg, env, action_mask):
+    def __init__(self, config, cfg, agent_idx):
         self.logger = self.setup_logger()
         self.debug_mode = config.debug_mode
         # if self.debug_mode: self.tensorboard = SummaryWriter()
         self.SAVE_PATH = cfg.DIR.output_dir
         self.config = config
         self.set_random_seeds(config.seed)
-        self.environment = env
-        self.action_mask = action_mask
-        self.environment_title = "STNP_reward_env"
+        self.environment = Game(cfg=cfg)
+        self.environment_title = "SEIRD"
         self.action_types = "DISCRETE"
         self.action_size = config.action_size
+        self.agent_idx = agent_idx
         self.total_agents = cfg.SIMULATOR.node_count
 
         self.lowest_possible_episode_score = self.get_lowest_possible_episode_score()
@@ -54,7 +54,7 @@ class Base_Agent(object):
 
     def get_score_required_to_win(self):
         """Gets average score required to win game"""
-        print("TITLE ", self.environment_title, "AGENT 0")
+        print("TITLE ", self.environment_title, "AGENT = ", self.agent_idx)
         return float("inf")
 
 
@@ -98,10 +98,12 @@ class Base_Agent(object):
             torch.cuda.manual_seed_all(random_seed)
             torch.cuda.manual_seed(random_seed)
 
-    def reset_game(self):
+
+    def reset_game(self, other_agents):
         """Resets the game information so we are ready to play a new episode"""
-        self.environment.seed(self.config.seed)
-        self.state = self.environment.reset()
+        #env.reset() resets to the initial states for all cities
+        env = self.environment.reset()
+        self.state = env[self.agent_idx]
         self.next_state = None
         self.action = None
         self.reward = None
@@ -118,6 +120,16 @@ class Base_Agent(object):
         if "exploration_strategy" in self.__dict__.keys(): self.exploration_strategy.reset()
         self.logger.info("Reseting game -- New start state {}".format(self.state))
 
+        #reset stats for other agents,given they play the same game
+        for agent in other_agents:
+            agent.state = env[agent.agent_idx]
+            agent.next_state = None
+            agent.action, agent.reward, agent.done = None, None, False
+            agent.total_episode_score_so_far = 0
+            agent.episode_states, agent.episode_rewards, agent.episode_actions,agent.episode_next_states = [],[],[],[]
+            agent.episode_dones, agent.episode_desired_goals, agent.episode_achieved_goals, agent.episode_observations = [],[],[],[]
+
+
     def track_episodes_data(self):
         """Saves the data from the recent episodes"""
         self.episode_states.append(self.state)
@@ -126,27 +138,30 @@ class Base_Agent(object):
         self.episode_next_states.append(self.next_state)
         self.episode_dones.append(self.done)
 
-    def run_n_episodes(self, num_episodes=None, show_whether_achieved_goal=True, save_and_print_results=True):
+    def run_n_episodes(self, other_agents, num_episodes=None, show_whether_achieved_goal=True, save_and_print_results=True):
         """Runs game to completion n times and then summarises results and saves model (if asked to)"""
         if num_episodes is None: num_episodes = self.config.num_episodes_to_run
         start = time.time()
         while self.episode_number < num_episodes:
             if self.config.save_model and self.episode_number % 5 ==0: 
                 self.locally_save_policy()
-            self.reset_game()
-            self.step()
+            self.reset_game(other_agents)
+            self.step(other_agents)
             if save_and_print_results: self.save_and_print_result()
+            
         time_taken = time.time() - start
         if show_whether_achieved_goal: self.show_whether_achieved_goal()
-        if self.config.save_model: self.locally_save_policy()
         return self.game_full_episode_scores, self.rolling_results, time_taken
 
-    def conduct_action(self, action):
+    def conduct_action(self, action_dict):
         """Conducts an action in the environment"""
-        self.next_state, self.reward, self.done, _ = self.environment.step(action)
+        #Environment is stepped in conduct action
+        states, rewards, done, _ = self.environment.step(action_dict)
+        self.next_state, self.reward, self.done, _ = states[self.agent_idx], rewards[self.agent_idx], done, _
         self.total_episode_score_so_far += self.reward
-        if self.hyperparameters["clip_rewards"]: self.reward =  max(min(self.reward, 1.0), -1.0)
-        return self.next_state, self.reward, self.done
+        return states, rewards, done
+        #if self.hyperparameters["clip_rewards"]: self.reward =  max(min(self.reward, 1.0), -1.0)
+
 
 
     def save_and_print_result(self):
@@ -222,6 +237,8 @@ class Base_Agent(object):
         """Saves the recent experience to the memory buffer"""
         if memory is None: memory = self.memory
         if experience is None: experience = self.state, self.action, self.reward, self.next_state, self.done
+        if(type(self.state)==dict):
+            print('state is dict for  = {}'.format(self.state))
         memory.add_experience(*experience)
 
     def take_optimisation_step(self, optimizer, network, loss, clipping_norm=None, retain_graph=False):

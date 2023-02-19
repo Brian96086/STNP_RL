@@ -1,6 +1,7 @@
 import torch 
 import numpy as np
 import matplotlib.pyplot as plt
+from utils.trainer.Trainer import Trainer
 
 
 device = torch.device("cpu")
@@ -39,6 +40,9 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
     min_loss = 0. # for early stopping
     wait = 0
     min_loss = float('inf')
+    c_arr, z_arr,t_arr= [], [], []
+    val_arr, test_arr = [], []
+    
     
     for t in range(n_epochs): 
         opt.zero_grad()
@@ -73,6 +77,12 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
         y_test_pred = test(dcrnn, torch.from_numpy(x_train).float(),torch.from_numpy(y_train).float(),
                       torch.from_numpy(x_test).float(), cfg.MODEL.z_dim)
         test_loss = N * MAE(torch.from_numpy(y_test_pred).float(),torch.from_numpy(y_test).float())/100
+
+        c_arr.append(torch.cat([x_c, y_c], dim = 0))
+        z_arr.append(dcrnn.z_mu_all)
+        t_arr.append(torch.cat[x_t, y_t, y_pred], dim = 0)
+        val_arr.append(y_val_pred)
+        test_arr.append(y_test_pred)
         if t % n_display ==0:
             print('train loss:', train_loss.item(), 'mae:', mae_loss.item(), 'kld:', kld_loss.item())
             print('val loss:', val_loss.item(), 'test loss:', test_loss.item())
@@ -94,8 +104,15 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
             if wait == patience:
                 print('Early stopping at epoch: %d' % t)
                 return train_losses, val_losses, test_losses, dcrnn.z_mu_all, dcrnn.z_logvar_all
+    c_arr = np.stack(c_arr, dim = 0)
+    z_arr = np.stack(z_arr, dim = 0)
+    t_arr = np.stack(t_arr, dim = 0)
+    val_arr = np.stack(val_arr, dim = 0)
+    test_arr = np.stack(test_arr, dim = 0)
+    data_scenarios = {"context_pts": c_arr, "latent_variable": z_arr,"target_pts": t_arr,
+          "valid_pred": val_arr, "test_pred": test_arr, "valid_gt":y_val, "test_gt":y_test}
         
-    return train_losses, val_losses, test_losses, dcrnn.z_mu_all, dcrnn.z_logvar_all
+    return train_losses, val_losses, test_losses, dcrnn.z_mu_all, dcrnn.z_logvar_all,data_scenarios
 
 
 def MAE(pred, target):
@@ -246,3 +263,55 @@ def MAE_MX(y_pred, y_test):
     mae_matrix = np.mean(np.abs(y_pred - y_test),axis=(2,3))
     mae = np.mean(np.abs(y_pred - y_test))
     return mae_matrix, mae
+
+def train_DQN(dqn, dcrnn, beta_epsilon_all, scenarios, episodes, config, cfg):
+    '''
+    Premise
+    - Within the STNP train(), we can retrieve lots of (x_ct, y_ct, x_t, y_t, z)
+    - By training an STNP model for one epoch, we can retrieve a lot of points
+    - Eg: retrieve 1000 data points and compute the reward
+
+    Stage1: Given fixed latent variable distribution, learn the reward function and informative parameter 
+    - state = [z, beta_epsilon_all, x_train, y_train]
+    - reward = acquisition function, 
+    - Model will output the best action -> correspond to parameter set
+    - env.step() will be fixed (selected parameter will have have its q-value masked to min value)
+      - or we can mask the chosen beta_epsilon to be 0 within the state vector
+    - To encourage the model to select the parameter with the best reward, we perform exponential/reciprocal decay on rewards
+    - 
+    Stage2: Given the model's decent adaptability to learn mapping from states to reward given fixed latent variable z
+
+    '''
+    #context_pts = [x_c, y_c], x_c = (n_c,2), y_c = (n_c,100)
+    #target_pts = [x_t, y_t, y_t_pred], x_t = (n_t, 2), y_t = y_t_pred = (n_t, 100)
+    context_pts = scenarios["context_pts"]
+    zs = scenarios["latent_variable"]
+    target_pts = scenarios["latent_variable"]
+    valid_pred = scenarios["valid_pred"]
+    test_pred = scenarios["test_pred"]
+
+    context_pts, zs, target_pts = scenarios 
+    n_c = context_pts.shape[0]
+    mask = np.ones(n_c).reshape(-1,1)
+    trainer = Trainer(config, cfg, dqn)
+    trainer.run_games_for_agents()
+
+    #stack x_c and y_c -> (n_c, 102) (n_c data points, 102 features)
+    #each z captures the representation of x_c, y_c -> stack with z (n_c, 103) 
+
+    # input_feat = torch.cat([context_pts, z], dim = 1)
+    # for t in range(episodes):
+    #     q_values = dqn.forward(input_feat)
+    #     q_values = q_values * mask
+    #     max_ind = np.argmax(q_values)
+    #     best_param = q_values[max_ind]
+    #     mask[best_param] = 0
+    #     reward = env.step(best_param)
+        
+    
+
+    # (x_ct, y_ct, x_t, y_t, z)
+    #
+    
+    return None
+    
