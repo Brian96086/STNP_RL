@@ -27,7 +27,7 @@ def test(dcrnn, x_train, y_train, x_test, z_dim):
     
     return np.concatenate(output_list)
 
-def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_test, n_display=500, patience = 5000): #7000, 1000
+def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_test, n_display=500, patience = 5000, beta_epsilon_all = []): #7000, 1000
     train_losses = []
     # mae_losses = []
     # kld_losses = []
@@ -42,7 +42,7 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
     min_loss = float('inf')
     c_arr, z_arr,t_arr= [], [], []
     val_arr, test_arr = [], []
-    
+    rewards = []
     
     for t in range(n_epochs): 
         opt.zero_grad()
@@ -64,6 +64,9 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
         train_loss = N * MAE(y_pred, y_t)/100 + dcrnn.KLD_gaussian()
         mae_loss = N * MAE(y_pred, y_t)/100
         kld_loss = dcrnn.KLD_gaussian()
+        if(len(beta_epsilon_all) !=0): # case where we are pre-training in stage 0
+            score_arr = calculate_score(cfg, dcrnn, x_train, y_train, beta_epsilon_all)
+            rewards.append(torch.from_numpy(score_arr))
         
         train_loss.backward()
         torch.nn.utils.clip_grad_norm_(dcrnn.parameters(), 5) #10
@@ -78,16 +81,17 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
                       torch.from_numpy(x_test).float(), cfg.MODEL.z_dim)
         test_loss = N * MAE(torch.from_numpy(y_test_pred).float(),torch.from_numpy(y_test).float())/100
 
-        c_arr.append(torch.cat([x_c, y_c], dim = 0))
+        c_arr.append(torch.cat([x_c, y_c], dim = 1)) #n_iter, n_xc, 102
         z_arr.append(dcrnn.z_mu_all)
-        t_arr.append(torch.cat[x_t, y_t, y_pred], dim = 0)
-        val_arr.append(y_val_pred)
-        test_arr.append(y_test_pred)
+        t_arr.append(torch.cat([x_t, y_t, y_pred], dim = 1))
+        val_arr.append(torch.from_numpy(y_val_pred))
+        test_arr.append(torch.from_numpy(y_test_pred))
         if t % n_display ==0:
             print('train loss:', train_loss.item(), 'mae:', mae_loss.item(), 'kld:', kld_loss.item())
             print('val loss:', val_loss.item(), 'test loss:', test_loss.item())
 
         if t % (n_display/10) ==0:
+            print('curr_epoch = {}'.format(t))
             train_losses.append(train_loss.item())
             val_losses.append(val_loss.item())
             test_losses.append(test_loss.item())
@@ -104,13 +108,15 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
             if wait == patience:
                 print('Early stopping at epoch: %d' % t)
                 return train_losses, val_losses, test_losses, dcrnn.z_mu_all, dcrnn.z_logvar_all
-    c_arr = np.stack(c_arr, dim = 0)
-    z_arr = np.stack(z_arr, dim = 0)
-    t_arr = np.stack(t_arr, dim = 0)
-    val_arr = np.stack(val_arr, dim = 0)
-    test_arr = np.stack(test_arr, dim = 0)
+
+    c_arr = torch.stack(c_arr, dim = 0)
+    z_arr = torch.stack(z_arr, dim = 0)
+    t_arr = torch.stack(t_arr, dim = 0)
+    val_arr = torch.stack(val_arr, dim = 0)
+    test_arr = torch.stack(test_arr, dim = 0)
+    reward_arr = torch.stack(rewards, dim = 0)
     data_scenarios = {"context_pts": c_arr, "latent_variable": z_arr,"target_pts": t_arr,
-          "valid_pred": val_arr, "test_pred": test_arr, "valid_gt":y_val, "test_gt":y_test}
+          "valid_pred": val_arr, "test_pred": test_arr, "valid_gt":y_val, "test_gt":y_test, "gt_rewards":reward_arr}
         
     return train_losses, val_losses, test_losses, dcrnn.z_mu_all, dcrnn.z_logvar_all,data_scenarios
 
@@ -264,7 +270,8 @@ def MAE_MX(y_pred, y_test):
     mae = np.mean(np.abs(y_pred - y_test))
     return mae_matrix, mae
 
-def train_DQN(dqn, dcrnn, beta_epsilon_all, scenarios, episodes, config, cfg):
+
+def train_DQN(dqn, dcrnn, beta_epsilon_all, scenarios, config, cfg, episodes):
     '''
     Premise
     - Within the STNP train(), we can retrieve lots of (x_ct, y_ct, x_t, y_t, z)
@@ -286,14 +293,13 @@ def train_DQN(dqn, dcrnn, beta_epsilon_all, scenarios, episodes, config, cfg):
     #target_pts = [x_t, y_t, y_t_pred], x_t = (n_t, 2), y_t = y_t_pred = (n_t, 100)
     context_pts = scenarios["context_pts"]
     zs = scenarios["latent_variable"]
-    target_pts = scenarios["latent_variable"]
+    target_pts = scenarios["target_pts"]
     valid_pred = scenarios["valid_pred"]
     test_pred = scenarios["test_pred"]
 
-    context_pts, zs, target_pts = scenarios 
+    #context_pts, zs, target_pts = scenarios 
     n_c = context_pts.shape[0]
-    mask = np.ones(n_c).reshape(-1,1)
-    trainer = Trainer(config, cfg, dqn)
+    trainer = Trainer(config, cfg, [dqn])
     trainer.run_games_for_agents()
 
     #stack x_c and y_c -> (n_c, 102) (n_c data points, 102 features)

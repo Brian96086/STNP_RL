@@ -1,0 +1,8 @@
+results/
+dcrnn1_data.pt
+dcrnn2_data.pt
+Training.log
+utils/trainer/__pycache__
+utils/env/__pycache__
+utils/agents/__pycache__
+results/

@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.nn as nn
 import torch.nn.functional as F
 from .Base_Agent import Base_Agent
+from .Q_predictor import Q_predictor
 from utils.exploration_strategies.Epsilon_Greedy_Exploration import Epsilon_Greedy_Exploration
 from utils.trainer.Replay_Buffer import Replay_Buffer
 
@@ -14,18 +15,13 @@ class DQN(Base_Agent):
     """A deep Q learning agent"""
     agent_name = "DQN"
     def __init__(self, config, cfg, env, action_mask):
-        Base_Agent.__init__(self, config, env)
+        Base_Agent.__init__(self, config, cfg, env, action_mask)
         self.memory = Replay_Buffer(self.hyperparameters["buffer_size"], self.hyperparameters["batch_size"], config.seed, self.device)
-        self.q_network_local = self.base_model = nn.Sequential(
-            nn.Linear(cfg.SIMULATOR.num_obs, 128),
-            nn.LeakyReLU(),
-            nn.Linear(128, 128),
-            nn.LeakyReLU(),
-            nn.Linear(128, cfg.SIMULATOR.num_actions),
-        )
+        self.q_network_local = Q_predictor(cfg)
         self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(),
                                               lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.exploration_strategy = Epsilon_Greedy_Exploration(config)
+        self.mask = action_mask.reshape(-1,1)
 
     def reset_game(self):
         super(DQN, self).reset_game()
@@ -50,16 +46,18 @@ class DQN(Base_Agent):
         # a "fake" dimension to make it a mini-batch rather than a single observation
         if state is None: state = self.state
         if isinstance(state, np.int64) or isinstance(state, int): state = np.array([state])
-        state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
-        if len(state.shape) < 2: state = state.unsqueeze(0)
+        #state = torch.from_numpy(state).float().unsqueeze(0).to(self.device)
+        # if len(state.shape) < 2: state = state.unsqueeze(0)
         self.q_network_local.eval() #puts network in evaluation mode
         with torch.no_grad():
             action_values = self.q_network_local(state)
-            action_values = action_values * self.mask
+            action_values = action_values * (1-self.mask)
         self.q_network_local.train() #puts network back in training mode
         action = self.exploration_strategy.perturb_action_for_exploration_purposes({"action_values": action_values,
                                                                                     "turn_off_exploration": self.turn_off_exploration,
                                                                                     "episode_number": self.episode_number})
+        if(action>=270):
+            import ipdb;ipdb.set_trace()
         self.logger.info("Q values {} -- Action chosen {}".format(action_values, action))
         return action
 

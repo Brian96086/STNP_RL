@@ -16,7 +16,7 @@ MODEL:
 TRAIN:
   episode: 100
   resume: "checkpoint_000000"
-  stnp_epoch: 20000
+  stnp_epoch: 2000
   train_iter: 8
   epoch_iters: 500
   n_display: 500

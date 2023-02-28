@@ -22,8 +22,6 @@ class Base_Agent(object):
         self.environment_title = "STNP_reward_env"
         self.action_types = "DISCRETE"
         self.action_size = config.action_size
-        self.total_agents = cfg.SIMULATOR.node_count
-
         self.lowest_possible_episode_score = self.get_lowest_possible_episode_score()
 
         self.state_size =  config.state_size
@@ -100,7 +98,7 @@ class Base_Agent(object):
 
     def reset_game(self):
         """Resets the game information so we are ready to play a new episode"""
-        self.environment.seed(self.config.seed)
+        self.environment.seed()
         self.state = self.environment.reset()
         self.next_state = None
         self.action = None
@@ -135,7 +133,8 @@ class Base_Agent(object):
                 self.locally_save_policy()
             self.reset_game()
             self.step()
-            if save_and_print_results: self.save_and_print_result()
+            if save_and_print_results: 
+                self.save_and_print_result()
         time_taken = time.time() - start
         if show_whether_achieved_goal: self.show_whether_achieved_goal()
         if self.config.save_model: self.locally_save_policy()
@@ -156,7 +155,7 @@ class Base_Agent(object):
 
     def save_result(self):
         """Saves the result of an episode of the game"""
-        self.game_full_episode_scores.append(self.total_episode_score_so_far)
+        self.game_full_episode_scores.append(self.total_episode_score_so_far.item())
         self.rolling_results.append(np.mean(self.game_full_episode_scores[-1 * self.rolling_score_window:]))
         self.save_max_result_seen()
 

@@ -39,6 +39,7 @@ def main(args):
     np.random.seed(3)
     mask_init = np.zeros(len(beta_epsilon_all))
     mask_init[:2] = 1
+    mask_init[-2:] = 1
 
     np.random.shuffle(mask_init)
     selected_beta_epsilon = beta_epsilon_all[mask_init.astype('bool')]
@@ -66,15 +67,32 @@ def main(args):
         config = build_config_dict(cfg, num_actions=len(beta_epsilon_all))
         x_train,y_train = x_train_init, y_train_init
         #Stage 0: temp STNP model generates data 
-        temp_dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
-        temp_opt = torch.optim.Adam(temp_dcrnn.parameters(), cfg.MODEL.lr) #1e-3
-        train_losses, val_losses, test_losses, z_mu, z_logvar, scenario_dict = train(
-                temp_dcrnn, temp_opt, cfg, cfg.TRAIN.stnp_epoch/5 ,x_train,
-                y_train,x_val, y_val, x_test, y_test,cfg.TRAIN.n_display, cfg.TRAIN.patience,
-        )
-        env = Game(cfg = cfg, action_space = beta_epsilon_all, scenario_dict = scenario_dict)
-        dqn = DQN(config, cfg, env)
-        train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, epochs = 300)
+        temp_model_num = 2
+        temp_dcrnn = None
+        data_path = "dcrnn{}_data.pt".format(temp_model_num)
+        if(not os.path.exists(data_path)):
+            temp_dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
+            temp_opt = torch.optim.Adam(temp_dcrnn.parameters(), cfg.MODEL.lr) #1e-3
+            train_losses, val_losses, test_losses, z_mu, z_logvar, scenario_dict = train(
+                    temp_dcrnn, temp_opt, cfg, int(cfg.TRAIN.stnp_epoch/5) ,x_train,
+                    y_train,x_val, y_val, x_test, y_test,cfg.TRAIN.n_display, cfg.TRAIN.patience,
+                    beta_epsilon_all=beta_epsilon_all
+            )
+            scenario_dict["mask"] = mask_init
+            torch.save(scenario_dict, data_path)
+        else:
+            scenario_dict = torch.load(data_path)
+            
+        
+
+
+
+        # np.save('y_all.npy',y_all)
+        # np.save('y_test.npy',y_test)
+
+        env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict)
+        dqn = DQN(config, cfg, env, mask_init)
+        train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = 300)
         exit()
 
 

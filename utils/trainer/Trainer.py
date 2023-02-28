@@ -20,6 +20,7 @@ class Trainer(object):
         self.results = self.create_object_to_store_results()
         for agent_number, agent_class in enumerate(self.agents):
             agent_name = "DQN_{}".format(agent_number)
+            
             self.run_games_for_agent(agent_number, agent_class)
             if self.config.visualise_overall_agent_results:
                 agent_rolling_score_results = [results[1] for results in  self.results[agent_name]]
@@ -54,7 +55,7 @@ class Trainer(object):
             print("agent model/class = {}".format(agent_class))
             print('agent number = {}'.format(agent_number))
             agent = self.agents[agent_number]
-            self.environment_name = agent.environment_title
+            self.environment_name = "STNP_RL"
             print(agent.hyperparameters)
             print("RANDOM SEED " , agent_config.seed)
             game_scores, rolling_scores, time_taken = agent.run_n_episodes()

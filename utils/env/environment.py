@@ -9,7 +9,7 @@ from engine import sample_z, data_to_z_params
 
 class Game():
     
-    def __init__(self, cfg, action_space, scenario_dict):
+    def __init__(self, cfg, dcrnn, action_space, scenario_dict, is_online = False):
         #super(Game, self).__init__()
         self.SAVE_PATH = cfg.DIR.output_dir
         self.device = torch.device(cfg.TRAIN.device)
@@ -17,52 +17,56 @@ class Game():
         self.scenario_dict = scenario_dict
         self.action_made = 0
         self.MAX_ACTIONS  = cfg.TRAIN.max_actions
+        self.cfg = cfg
+        self.dcrnn = dcrnn
         
         self.num_agents = 1
         self._agent_ids = list(range(self.num_agents))
 
-        self.A, self.population = self.make_world()
-        self.initial_infected = self.make_initial_infected()
-
-        self.ExpPopIn = np.zeros(self.NUM_CITIES)
         self.episode_count = 0
-        self.gt_rewards = None
+        self.gt_reward_arr = None if "gt_rewards" not in scenario_dict.keys() else scenario_dict["gt_rewards"]
+        self.is_online = is_online
         
     
-    def step(self, dcrnn, action_idx):
-        if(self.gt_rewards == None):
-            context_pts = self.scenario_dict["context_pts"]
-            target_pts = self.scenario_dict["latent_variable"]
-            valid_pred = self.scenario_dict["valid_pred"]
-            test_pred = self.scenario_dict["test_pred"]
-            x_c, y_c = self.scenario_dict["context"]
-            self.gt_rewards = self.calculate_score(dcrnn)
+    def step(self, action_idx):
+        self.context_pts = self.scenario_dict["context_pts"]
+        self.target_pts = self.scenario_dict["target_pts"]
+        self.latent_variable = self.scenario_dict["latent_variable"]
+        self.valid_pred = self.scenario_dict["valid_pred"]
+        self.test_pred = self.scenario_dict["test_pred"]
+        if(self.gt_reward_arr != None): #load from existing data
+            self.gt_reward_arr = self.scenario_dict["gt_rewards"][-1].reshape(-1,1)
+        else: #online training
+            x_c, y_c = torch.split(self.context_pts, [2, 100], dim = 2)
+            x_t, y_t, y_t_pred = torch.split(self.target_pts, [2, 100, 100], dim = 2) #n_iter x n_pts x pt_dim
+            x_train = torch.cat([x_c, x_t], dim = 1)[0]
+            y_train = torch.cat([y_c, y_t], dim = 1)[0]
+            self.gt_reward_arr = self.calculate_score(self.cfg, self.dcrnn, x_train, y_train, self.action_space)
+        if(self.action_made == 1):
+            print('max action = {}'.format(self.MAX_ACTIONS))
+            torch.sort(self.gt_reward_arr)
+            print("reward stats: mean = {}, median = {}, max = {}, top 5 values = {}".format(
+                torch.mean(self.gt_reward_arr), torch.median(self.gt_reward_arr), torch.max(self.gt_reward_arr),  self.gt_reward_arr[-5:]
+            ))
+        
         selected_param = self.action_space[action_idx]
         observation = self.scenario_dict
-        reward = self.gt_rewards[action_idx]
-        
+        reward = self.gt_reward_arr[action_idx]
         self.action_made +=1
-
-            
-        done = {"__all__": self.action_made >= self.max_week,}
-        info = {}
+        done = {"__all__": self.action_made >= self.MAX_ACTIONS}
+        info = {"selected_param": selected_param, "gt_reward_arr": self.gt_reward_arr}
         
         return observation, reward, done, info
 
 
-    def get_reward(self,dcrnn, action_idx):
-        return self.compute_acquisition_reward(dcrnn, action_idx)
-
-    def compute_acquistion_reward(self, dcrnn, action_idx):
-        return self.step(dcrnn, action_idx)
+    def get_reward(self, action_idx):
+        return self.gt_rewards[action_idx]
 
     
     def calculate_score(self, cfg, dcrnn, x_train, y_train, beta_epsilon_all):
-        x_train = torch.from_numpy(x_train).float()
-        y_train = torch.from_numpy(y_train).float()
         # query z_mu, z_var of the current training data
         with torch.no_grad():
-            z_mu, z_logvar = data_to_z_params(x_train.to(self.device),y_train.to(self.device))
+            z_mu, z_logvar = data_to_z_params(dcrnn, x_train.to(self.device),y_train.to(self.device))
             score_list = []
             for i in range(len(beta_epsilon_all)):
                 # generate x_search
@@ -99,25 +103,16 @@ class Game():
                 score_list.append(score.item())
             score_array = np.array(score_list)
         return score_array
-    
-
-
-
-
-
-
 
     def reset(self):
-        return {city: self.get_observation(city) for city in range(self.NUM_CITIES)}
-
+        self.action_made = 0
+        return self.scenario_dict
     
     def render(self, mode):
         pass
     
-    
     def close(self):
         pass
-
     
     def seed(self):
         pass
