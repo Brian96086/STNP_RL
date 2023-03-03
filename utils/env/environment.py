@@ -9,7 +9,7 @@ from engine import sample_z, data_to_z_params
 
 class Game():
     
-    def __init__(self, cfg, dcrnn, action_space, scenario_dict, is_online = False):
+    def __init__(self, cfg, dcrnn, action_space, scenario_dict, dataset_idx, is_online = False):
         #super(Game, self).__init__()
         self.SAVE_PATH = cfg.DIR.output_dir
         self.device = torch.device(cfg.TRAIN.device)
@@ -22,20 +22,23 @@ class Game():
         
         self.num_agents = 1
         self._agent_ids = list(range(self.num_agents))
+        self.actions_made = 0
 
         self.episode_count = 0
         self.gt_reward_arr = None if "gt_rewards" not in scenario_dict.keys() else scenario_dict["gt_rewards"]
         self.is_online = is_online
+        self.dataset_idx = dataset_idx
         
     
     def step(self, action_idx):
-        self.context_pts = self.scenario_dict["context_pts"]
-        self.target_pts = self.scenario_dict["target_pts"]
-        self.latent_variable = self.scenario_dict["latent_variable"]
-        self.valid_pred = self.scenario_dict["valid_pred"]
-        self.test_pred = self.scenario_dict["test_pred"]
+        idx = self.dataset_idx
+        self.context_pts = self.scenario_dict["context_pts"][idx:idx+1]
+        self.target_pts = self.scenario_dict["target_pts"][idx:idx+1]
+        self.latent_variable = self.scenario_dict["latent_variable"][idx:idx+1]
+        self.valid_pred = self.scenario_dict["valid_pred"][idx:idx+1]
+        self.test_pred = self.scenario_dict["test_pred"][idx:idx+1]
         if(self.gt_reward_arr != None): #load from existing data
-            self.gt_reward_arr = self.scenario_dict["gt_rewards"][-1].reshape(-1,1)
+            self.gt_reward_arr = self.scenario_dict["gt_rewards"][idx:idx+1].reshape(-1,1)
         else: #online training
             x_c, y_c = torch.split(self.context_pts, [2, 100], dim = 2)
             x_t, y_t, y_t_pred = torch.split(self.target_pts, [2, 100, 100], dim = 2) #n_iter x n_pts x pt_dim
@@ -50,10 +53,16 @@ class Game():
             ))
         
         selected_param = self.action_space[action_idx]
-        observation = self.scenario_dict
+        #observation = self.scenario_dict
+        ct_shape = torch.tensor(self.context_pts.shape[-2:])
+        tgt_shape = torch.tensor(self.target_pts.shape[-2:])
+        observation = torch.cat([self.context_pts.flatten(), self.target_pts.flatten(), self.latent_variable.flatten(),ct_shape , tgt_shape], dim = 0)
         reward = self.gt_reward_arr[action_idx]
         self.action_made +=1
-        done = {"__all__": self.action_made >= self.MAX_ACTIONS}
+        #done = {"__all__": self.action_made >= self.MAX_ACTIONS}
+        done = self.action_made >= self.MAX_ACTIONS
+        print('data_num = {}, actions_made = {}, action = {}, reward = {}'.format(self.dataset_idx, self.actions_made, action_idx, reward))
+        print('done = ', done)
         info = {"selected_param": selected_param, "gt_reward_arr": self.gt_reward_arr}
         
         return observation, reward, done, info
@@ -105,8 +114,23 @@ class Game():
         return score_array
 
     def reset(self):
+        idx = self.dataset_idx
+        self.context_pts = self.scenario_dict["context_pts"][idx:idx+1]
+        self.target_pts = self.scenario_dict["target_pts"][idx:idx+1]
+        self.latent_variable = self.scenario_dict["latent_variable"][idx:idx+1]
+        self.valid_pred = self.scenario_dict["valid_pred"][idx:idx+1]
+        self.test_pred = self.scenario_dict["test_pred"][idx:idx+1]
+        
+        ct_shape = torch.tensor(self.context_pts.shape[-2:])
+        tgt_shape = torch.tensor(self.target_pts.shape[-2:])
+        observation = torch.cat([self.context_pts.flatten(), self.target_pts.flatten(), self.latent_variable.flatten(),ct_shape, tgt_shape], dim = 0)
+        print('reset game - observation shape = {}'.format(observation.shape))
+        
+        
         self.action_made = 0
-        return self.scenario_dict
+        
+        
+        return observation
     
     def render(self, mode):
         pass

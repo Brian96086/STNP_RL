@@ -89,10 +89,22 @@ def main(args):
 
         # np.save('y_all.npy',y_all)
         # np.save('y_test.npy',y_test)
-
-        env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict)
+        env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 0)
         dqn = DQN(config, cfg, env, mask_init)
-        train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = 300)
+        for i in range(300):
+            env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = i)
+            dqn.env = env
+            train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = cfg.TRAIN.episode)
+        checkpoint_path = "results/dqn_ckpt_{i}.pth".format(i)
+        if(i%20):
+            torch.save({
+                'model': dqn.q_network_local.state_dict(),
+                'optimizer': dqn.q_network_optimizer.state_dict(),
+                #'epoch': epoch,
+                'config': cfg,
+                #'loss': loss_list,
+                #'val_mae': val_mae_list
+            }, checkpoint_path)
         exit()
 
 

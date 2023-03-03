@@ -1,6 +1,6 @@
 DIR: 
-  exp: "testYaml"
-  snapshot: "/Users/brian96086/Documents/DSC180/RL_Opt_Replication/ckpt"
+  exp: "trainOn400"
+  snapshot: "/home/bswang/private/RL_results/stnp"
 
 SIMULATOR:
   population: 100000
@@ -14,13 +14,15 @@ MODEL:
   backbone: "deepQ"
 
 TRAIN:
-  episode: 100
+  episode: 300
   resume: "checkpoint_000000"
   stnp_epoch: 2000
   train_iter: 8
   epoch_iters: 500
   n_display: 500
   patience: 5000
+  device: "cpu"
+  max_actions: 150
   
 
 VAL:

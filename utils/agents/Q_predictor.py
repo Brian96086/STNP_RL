@@ -65,7 +65,21 @@ class Q_predictor(nn.Module):
 
          #TODO 1: add convolution on y_t for both encode_p and encode_q
         #TODO 2: after q_rep, p_rep, let model learn the relationship based on similar z value
-        c_pts, z, t_pts = x["context_pts"], x["latent_variable"], x["target_pts"]
+        #TODO: check when batch changes
+        x = x.reshape(-1,1)
+        
+        state_arr, ct_shape, tgt_shape  = torch.split(x, [x.shape[0]-4, 2, 2], dim = 0)
+        ct_n, ct_dim = int(ct_shape[0]), int(ct_shape[1]) #context
+        tgt_n, tgt_dim = int(tgt_shape[0]), int(tgt_shape[1]) #target
+        z_length  = state_arr.shape[0]-ct_n*ct_dim-tgt_n*tgt_dim
+        ct_arr, tgt_arr, z_arr = torch.split(state_arr.unsqueeze(0), [ct_n*ct_dim, tgt_n*tgt_dim, z_length], dim = 1)
+        c_pts = ct_arr.reshape(1, ct_n, ct_dim)
+        t_pts = tgt_arr.reshape(1, tgt_n, tgt_dim)
+        z = z_arr.reshape(1, z_length)
+        
+#         c_pts = x["context_pts"]
+#         z = x["latent_variable"]
+#         t_pts = x["target_pts"]
         #import ipdb;ipdb.set_trace()
         #x_c,y_c  = torch.split(c_pts, [2, 100], dim = 1)
         #x_t, y_t, y_pred = torch.split(t_pts, [2,100,100], dim = 1)

@@ -98,7 +98,7 @@ class Base_Agent(object):
 
     def reset_game(self):
         """Resets the game information so we are ready to play a new episode"""
-        self.environment.seed()
+        #self.environment.seed()
         self.state = self.environment.reset()
         self.next_state = None
         self.action = None
@@ -129,6 +129,7 @@ class Base_Agent(object):
         if num_episodes is None: num_episodes = self.config.num_episodes_to_run
         start = time.time()
         while self.episode_number < num_episodes:
+            print('epsiode = {}'.format(self.episode_number))
             if self.config.save_model and self.episode_number % 5 ==0: 
                 self.locally_save_policy()
             self.reset_game()
@@ -144,6 +145,7 @@ class Base_Agent(object):
         """Conducts an action in the environment"""
         self.next_state, self.reward, self.done, _ = self.environment.step(action)
         self.total_episode_score_so_far += self.reward
+        self.mask[action] = 1
         if self.hyperparameters["clip_rewards"]: self.reward =  max(min(self.reward, 1.0), -1.0)
         return self.next_state, self.reward, self.done
 

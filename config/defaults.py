@@ -58,7 +58,7 @@ _C.TRAIN = CN()
 # restore training from a checkpoint
 _C.TRAIN.resume = "checkpoint_000000"
 _C.TRAIN.counting_loss = "l1loss"
-_C.TRAIN.episode = 100
+_C.TRAIN.episode = 500
 _C.TRAIN.stnp_epoch = 20000
 _C.TRAIN.train_iter = 8
 # iterations of each epoch (irrelevant to batch size)
@@ -84,9 +84,9 @@ _C.TRAIN.disp_iter = 20
 _C.TRAIN.start_epoch = 0
 _C.TRAIN.device = 'cpu'
 
-_C.TRAIN.batch_size = 256
+_C.TRAIN.batch_size = 1
 _C.TRAIN.buffer_size = 40000
-_C.TRAIN.epsilon = 1.0
+_C.TRAIN.epsilon = 0.95
 _C.TRAIN.epsilon_decay_rate_denominator = 1
 _C.TRAIN.discount_rate = 0.99
 _C.TRAIN.tau = 0.01
@@ -98,7 +98,7 @@ _C.TRAIN.linear_hidden_units = [30, 15]
 _C.TRAIN.final_layer_activation = "None"
 _C.TRAIN.batch_norm = False
 _C.TRAIN.gradient_clipping_norm = 0.7
-_C.TRAIN.learning_iterations = 100
+_C.TRAIN.learning_iterations = 20
 _C.TRAIN.clip_rewards = False
 _C.TRAIN.reward_penalty = 0.75
 _C.TRAIN.max_actions = 100

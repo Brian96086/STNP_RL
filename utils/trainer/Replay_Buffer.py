@@ -40,12 +40,12 @@ class Replay_Buffer(object):
             
     def separate_out_data_types(self, experiences):
         """Puts the sampled experience into the correct format for a PyTorch neural network"""
-        states = torch.from_numpy(np.vstack([e.state for e in experiences if e is not None])).float().to(self.device)
+        states = torch.from_numpy(np.vstack([e.state.detach().numpy() for e in experiences if e is not None])).float().to(self.device) # shape = (states, ), not (states, 1)
         actions = torch.from_numpy(np.vstack([e.action for e in experiences if e is not None])).float().to(self.device)
         rewards = torch.from_numpy(np.vstack([e.reward for e in experiences if e is not None])).float().to(self.device)
-        next_states = torch.from_numpy(np.vstack([e.next_state for e in experiences if e is not None])).float().to(self.device)
+        next_states = torch.from_numpy(np.vstack([e.next_state.detach().numpy() for e in experiences if e is not None])).float().to(self.device)
         dones = torch.from_numpy(np.vstack([int(e.done) for e in experiences if e is not None])).float().to(self.device)
-        
+        #next_state_shape = [e.next_state.detach().shape for e in experiences if e is not None]        
         return states, actions, rewards, next_states, dones
     
     def pick_experiences(self, num_experiences=None):

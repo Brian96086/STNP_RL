@@ -52,10 +52,17 @@ class DQN(Base_Agent):
         with torch.no_grad():
             action_values = self.q_network_local(state)
             action_values = action_values * (1-self.mask)
+            print('max action = {}'.format(np.argmax(action_values)))
         self.q_network_local.train() #puts network back in training mode
-        action = self.exploration_strategy.perturb_action_for_exploration_purposes({"action_values": action_values,
-                                                                                    "turn_off_exploration": self.turn_off_exploration,
-                                                                                    "episode_number": self.episode_number})
+#         action = self.exploration_strategy.perturb_action_for_exploration_purposes(
+#             {"action_values": action_values,
+#              "turn_off_exploration": self.turn_off_exploration,
+#              "episode_number": self.episode_number}
+#         )
+        if(random.random() < 0.05):
+            action = np.random.randint(0, 270)
+        else:
+            action = torch.argmax(action_values).item()
         if(action>=270):
             import ipdb;ipdb.set_trace()
         self.logger.info("Q values {} -- Action chosen {}".format(action_values, action))
@@ -88,7 +95,8 @@ class DQN(Base_Agent):
 
     def compute_q_values_for_next_states(self, next_states):
         """Computes the q_values for next state we will use to create the loss to train the Q network"""
-        Q_targets_next = self.q_network_local(next_states).detach().max(1)[0].unsqueeze(1)
+        #Q_targets_next = self.q_network_local(next_states).detach().max(1)[0].unsqueeze(1) #This is for BATCH x ACTIONS
+        Q_targets_next = self.q_network_local(next_states).detach().max(0)[0].unsqueeze(1) #ACTIONS x 1
         return Q_targets_next
 
     def compute_q_values_for_current_states(self, rewards, Q_targets_next, dones):
@@ -98,7 +106,9 @@ class DQN(Base_Agent):
 
     def compute_expected_q_values(self, states, actions):
         """Computes the expected q_values we will use to create the loss to train the Q network"""
-        Q_expected = self.q_network_local(states).gather(1, actions.long()) #must convert actions to long so can be used as index
+        #Q_output = (ACTIONS, 1)
+        #Q_expected = self.q_network_local(states).gather(1, actions.long()) #must convert actions to long so can be used as index
+        Q_expected = self.q_network_local(states).gather(0, actions.long())
         return Q_expected
 
     def locally_save_policy(self):
