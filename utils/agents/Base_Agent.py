@@ -16,12 +16,14 @@ class Base_Agent(object):
         # if self.debug_mode: self.tensorboard = SummaryWriter()
         self.SAVE_PATH = cfg.DIR.output_dir
         self.config = config
+        self.cfg = cfg
         self.set_random_seeds(config.seed)
         self.environment = env
         self.action_mask = action_mask
         self.environment_title = "STNP_reward_env"
         self.action_types = "DISCRETE"
         self.action_size = config.action_size
+        self.reward_penalty = cfg.TRAIN.reward_penalty
         self.lowest_possible_episode_score = self.get_lowest_possible_episode_score()
 
         self.state_size =  config.state_size
@@ -143,9 +145,30 @@ class Base_Agent(object):
 
     def conduct_action(self, action):
         """Conducts an action in the environment"""
-        self.next_state, self.reward, self.done, _ = self.environment.step(action)
+        self.next_state, self.reward, self.done, info = self.environment.step(action)
         self.total_episode_score_so_far += self.reward
         self.mask[action] = 1
+        self.action_idx_ls.append(self.action)
+        if(self.done):
+            reward_arr = info["gt_reward_arr"].numpy()
+            sorted_ind = np.argsort(reward_arr.copy()) #get indices of top rewards, argsort is in ascending order
+            sorted_rewards = reward_arr[sorted_ind]
+            weights = self.reward_penalty**(np.arange(9, -1, -1))
+            weighted_rewards= sorted_rewards[-10:]*weights
+            top_twenty_union = np.intersect1d(self.action_idx_ls, sorted_ind[-20:])
+            top_ten_union = np.intersect1d(self.action_idx_ls, sorted_ind[-10:])
+            
+            
+            self.action_idx_ls = torch.tensor(self.action_idx_ls)
+            top_chosen_rewards = np.sort(reward_arr[self.action_idx_ls])[-10:]
+            print('ACTION LIST - DQN = {}'.format(self.action_idx_ls))
+            print('GT TOP 20 IDX = {}'.format(sorted_ind[-20:]))
+            print('DQN - top 10 chosen rewards = ', top_chosen_rewards)
+            print('GT - top 10 rewards = {},'.format(sorted_rewards[-10:]))
+            print('DQN - top_twenty_union = {}, top_ten_union = {}'.format(len(top_twenty_union),len(top_ten_union))) 
+            print('OVERALL - gt_weighted reward = {}, chosen sum = '.format(sum(weighted_rewards), self.total_episode_score_so_far))
+            
+                  
         if self.hyperparameters["clip_rewards"]: self.reward =  max(min(self.reward, 1.0), -1.0)
         return self.next_state, self.reward, self.done
 

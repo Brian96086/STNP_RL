@@ -57,12 +57,6 @@ class Q_predictor(nn.Module):
         )
     
     def forward(self, x):
-        # context_pts = scenarios["context_pts"]
-        # zs = scenarios["latent_variable"]
-        # target_pts = scenarios["latent_variable"]
-        # valid_pred = scenarios["valid_pred"]
-        # test_pred = scenarios["test_pred"]
-
          #TODO 1: add convolution on y_t for both encode_p and encode_q
         #TODO 2: after q_rep, p_rep, let model learn the relationship based on similar z value
         #TODO: check when batch changes

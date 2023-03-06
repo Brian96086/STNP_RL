@@ -15,7 +15,7 @@ class Game():
         self.device = torch.device(cfg.TRAIN.device)
         self.action_space = action_space
         self.scenario_dict = scenario_dict
-        self.action_made = 0
+        self.reward_penalty = cfg.TRAIN.reward_penalty
         self.MAX_ACTIONS  = cfg.TRAIN.max_actions
         self.cfg = cfg
         self.dcrnn = dcrnn
@@ -45,28 +45,21 @@ class Game():
             x_train = torch.cat([x_c, x_t], dim = 1)[0]
             y_train = torch.cat([y_c, y_t], dim = 1)[0]
             self.gt_reward_arr = self.calculate_score(self.cfg, self.dcrnn, x_train, y_train, self.action_space)
-        if(self.action_made == 1):
-            print('max action = {}'.format(self.MAX_ACTIONS))
-            torch.sort(self.gt_reward_arr)
-            print("reward stats: mean = {}, median = {}, max = {}, top 5 values = {}".format(
-                torch.mean(self.gt_reward_arr), torch.median(self.gt_reward_arr), torch.max(self.gt_reward_arr),  self.gt_reward_arr[-5:]
-            ))
+        if(self.actions_made == 0):
+            print("reward stats: mean = {}, median = {}, max = {}".format(
+                torch.mean(self.gt_reward_arr), torch.median(self.gt_reward_arr), torch.max(self.gt_reward_arr)))
         
         selected_param = self.action_space[action_idx]
         #observation = self.scenario_dict
-        ct_shape = torch.tensor(self.context_pts.shape[-2:])
-        tgt_shape = torch.tensor(self.target_pts.shape[-2:])
-        observation = torch.cat([self.context_pts.flatten(), self.target_pts.flatten(), self.latent_variable.flatten(),ct_shape , tgt_shape], dim = 0)
-        reward = self.gt_reward_arr[action_idx]
-        self.action_made +=1
-        #done = {"__all__": self.action_made >= self.MAX_ACTIONS}
-        done = self.action_made >= self.MAX_ACTIONS
+        observation = self.dict_to_state(self.context_pts, self.target_pts, self.latent_variable) #convert from dictionary to vector(RL state has to be a flattened vector)
+        reward = self.gt_reward_arr[action_idx]*self.reward_penalty**(self.actions_made)
+        self.actions_made +=1
+        done = self.actions_made >= self.MAX_ACTIONS
         print('data_num = {}, actions_made = {}, action = {}, reward = {}'.format(self.dataset_idx, self.actions_made, action_idx, reward))
         print('done = ', done)
-        info = {"selected_param": selected_param, "gt_reward_arr": self.gt_reward_arr}
+        info = {"selected_param": selected_param, "gt_reward_arr": self.gt_reward_arr.flatten()}
         
         return observation, reward, done, info
-
 
     def get_reward(self, action_idx):
         return self.gt_rewards[action_idx]
@@ -114,23 +107,27 @@ class Game():
         return score_array
 
     def reset(self):
-        idx = self.dataset_idx
+        idx = self.dataset_idx +1
         self.context_pts = self.scenario_dict["context_pts"][idx:idx+1]
         self.target_pts = self.scenario_dict["target_pts"][idx:idx+1]
         self.latent_variable = self.scenario_dict["latent_variable"][idx:idx+1]
         self.valid_pred = self.scenario_dict["valid_pred"][idx:idx+1]
         self.test_pred = self.scenario_dict["test_pred"][idx:idx+1]
         
-        ct_shape = torch.tensor(self.context_pts.shape[-2:])
-        tgt_shape = torch.tensor(self.target_pts.shape[-2:])
-        observation = torch.cat([self.context_pts.flatten(), self.target_pts.flatten(), self.latent_variable.flatten(),ct_shape, tgt_shape], dim = 0)
+        observation = self.dict_to_state(self.context_pts, self.target_pts, self.latent_variable)
+        self.actions_made = 0
         print('reset game - observation shape = {}'.format(observation.shape))
-        
-        
-        self.action_made = 0
-        
-        
         return observation
+    
+    def dict_to_state(self, context_pts, target_pts, latent_variable):
+        ct_shape = torch.tensor(context_pts.shape[-2:])
+        tgt_shape = torch.tensor(target_pts.shape[-2:])
+        context_pts = context_pts.flatten()
+        target_pts = target_pts.flatten()
+        latent_variable = latent_variable.flatten()
+        observation = torch.cat([context_pts,target_pts , latent_variable, ct_shape, tgt_shape], dim = 0)
+        return observation
+        
     
     def render(self, mode):
         pass

@@ -22,7 +22,11 @@ TRAIN:
   n_display: 500
   patience: 5000
   device: "cpu"
-  max_actions: 150
+  
+  max_actions: 25
+  update_every_n_steps: 20
+  learning_iterations: 40
+  reward_penalty: 1.0
   
 
 VAL:

@@ -21,11 +21,15 @@ class DQN(Base_Agent):
         self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(),
                                               lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.exploration_strategy = Epsilon_Greedy_Exploration(config)
-        self.mask = action_mask.reshape(-1,1)
+        self.mask_init = action_mask.reshape(-1,1)
+        self.mask = self.mask_init.copy()
+        self.action_idx_ls = []
 
     def reset_game(self):
         super(DQN, self).reset_game()
         self.update_learning_rate(self.hyperparameters["learning_rate"], self.q_network_optimizer)
+        self.mask = self.mask_init.copy()
+        self.action_idx_ls = []
 
     def step(self):
         """Runs a step within a game including a learning step if required"""
@@ -63,8 +67,6 @@ class DQN(Base_Agent):
             action = np.random.randint(0, 270)
         else:
             action = torch.argmax(action_values).item()
-        if(action>=270):
-            import ipdb;ipdb.set_trace()
         self.logger.info("Q values {} -- Action chosen {}".format(action_values, action))
         return action
 

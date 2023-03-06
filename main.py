@@ -91,20 +91,20 @@ def main(args):
         # np.save('y_test.npy',y_test)
         env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 0)
         dqn = DQN(config, cfg, env, mask_init)
-        for i in range(300):
+        for i in range(len(scenario_dict["context_pts"]), -1, -1):
             env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = i)
             dqn.env = env
             train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = cfg.TRAIN.episode)
-        checkpoint_path = "results/dqn_ckpt_{i}.pth".format(i)
-        if(i%20):
-            torch.save({
-                'model': dqn.q_network_local.state_dict(),
-                'optimizer': dqn.q_network_optimizer.state_dict(),
-                #'epoch': epoch,
-                'config': cfg,
-                #'loss': loss_list,
-                #'val_mae': val_mae_list
-            }, checkpoint_path)
+            checkpoint_path = "results/dqn_ckpt_{}.pth".format(i)
+            if(i%20):
+                torch.save({
+                    'model': dqn.q_network_local.state_dict(),
+                    'optimizer': dqn.q_network_optimizer.state_dict(),
+                    #'epoch': epoch,
+                    'config': cfg,
+                    #'loss': loss_list,
+                    #'val_mae': val_mae_list
+                }, checkpoint_path)
         exit()
 
 
@@ -239,7 +239,7 @@ def build_config_dict(cfg, num_actions):
     config.file_to_save_data_results = "results/"
     config.file_to_save_results_graph = "results/"
     config.show_solution_score = False
-    config.visualise_individual_results = False
+    config.visualise_individual_results = True
     config.visualise_overall_agent_results = True
     config.standard_deviation_results = 1.0
     config.runs_per_agent = 1

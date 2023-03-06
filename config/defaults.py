@@ -100,7 +100,7 @@ _C.TRAIN.batch_norm = False
 _C.TRAIN.gradient_clipping_norm = 0.7
 _C.TRAIN.learning_iterations = 20
 _C.TRAIN.clip_rewards = False
-_C.TRAIN.reward_penalty = 0.75
+_C.TRAIN.reward_penalty = 0.95
 _C.TRAIN.max_actions = 100
 
 
