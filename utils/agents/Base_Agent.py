@@ -10,11 +10,12 @@ from utils.env.environment import Game
 
 class Base_Agent(object):
 
-    def __init__(self, config, cfg, env, action_mask):
+    def __init__(self, config, cfg, env, action_mask, device = "cpu"):
         self.logger = self.setup_logger()
         self.debug_mode = config.debug_mode
         # if self.debug_mode: self.tensorboard = SummaryWriter()
         self.SAVE_PATH = cfg.DIR.output_dir
+        self.device = device
         self.config = config
         self.cfg = cfg
         self.set_random_seeds(config.seed)
@@ -153,20 +154,19 @@ class Base_Agent(object):
             reward_arr = info["gt_reward_arr"].numpy()
             sorted_ind = np.argsort(reward_arr.copy()) #get indices of top rewards, argsort is in ascending order
             sorted_rewards = reward_arr[sorted_ind]
-            weights = self.reward_penalty**(np.arange(9, -1, -1))
-            weighted_rewards= sorted_rewards[-10:]*weights
+            weights = self.reward_penalty**(np.arange(24, -1, -1)) #depends on total number of actions per game
+            weighted_rewards= sorted_rewards[-25:]*weights
             top_twenty_union = np.intersect1d(self.action_idx_ls, sorted_ind[-20:])
             top_ten_union = np.intersect1d(self.action_idx_ls, sorted_ind[-10:])
             
-            
-            self.action_idx_ls = torch.tensor(self.action_idx_ls)
+#             self.action_idx_ls = torch.tensor(self.action_idx_ls)
             top_chosen_rewards = np.sort(reward_arr[self.action_idx_ls])[-10:]
             print('ACTION LIST - DQN = {}'.format(self.action_idx_ls))
             print('GT TOP 20 IDX = {}'.format(sorted_ind[-20:]))
-            print('DQN - top 10 chosen rewards = ', top_chosen_rewards)
-            print('GT - top 10 rewards = {},'.format(sorted_rewards[-10:]))
+            print('DQN - top 10 chosen rewards = ', np.round(top_chosen_rewards, 3))
+            print('GT - top 10 rewards = {},'.format(np.round(sorted_rewards[-10:], 3)))
             print('DQN - top_twenty_union = {}, top_ten_union = {}'.format(len(top_twenty_union),len(top_ten_union))) 
-            print('OVERALL - gt_weighted reward = {}, chosen sum = '.format(sum(weighted_rewards), self.total_episode_score_so_far))
+            print('OVERALL - gt_weighted reward = {}, chosen sum = {}'.format(np.round(sum(weighted_rewards),3), np.round(self.total_episode_score_so_far.item(), 3)))
             
                   
         if self.hyperparameters["clip_rewards"]: self.reward =  max(min(self.reward, 1.0), -1.0)

@@ -90,7 +90,7 @@ def main(args):
         # np.save('y_all.npy',y_all)
         # np.save('y_test.npy',y_test)
         env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 0)
-        dqn = DQN(config, cfg, env, mask_init)
+        dqn = DQN(config, cfg, env, mask_init, device)
         for i in range(len(scenario_dict["context_pts"]), -1, -1):
             env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = i)
             dqn.env = env

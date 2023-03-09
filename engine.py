@@ -80,7 +80,7 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
         y_test_pred = test(dcrnn, torch.from_numpy(x_train).float(),torch.from_numpy(y_train).float(),
                       torch.from_numpy(x_test).float(), cfg.MODEL.z_dim)
         test_loss = N * MAE(torch.from_numpy(y_test_pred).float(),torch.from_numpy(y_test).float())/100
-
+        
         c_arr.append(torch.cat([x_c, y_c], dim = 1)) #n_iter, n_xc, 102
         z_arr.append(dcrnn.z_mu_all)
         t_arr.append(torch.cat([x_t, y_t, y_pred], dim = 1))

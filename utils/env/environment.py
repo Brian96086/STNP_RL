@@ -39,6 +39,10 @@ class Game():
         self.test_pred = self.scenario_dict["test_pred"][idx:idx+1]
         if(self.gt_reward_arr != None): #load from existing data
             self.gt_reward_arr = self.scenario_dict["gt_rewards"][idx:idx+1].reshape(-1,1)
+            self.top_twenty_idx = np.argsort(self.gt_reward_arr.flatten().numpy().copy())[-20:]
+            self.reward_rank_arr = torch.zeros(self.gt_reward_arr.shape)
+            self.reward_rank_arr[self.top_twenty_idx] = 1
+            
         else: #online training
             x_c, y_c = torch.split(self.context_pts, [2, 100], dim = 2)
             x_t, y_t, y_t_pred = torch.split(self.target_pts, [2, 100, 100], dim = 2) #n_iter x n_pts x pt_dim
@@ -47,17 +51,22 @@ class Game():
             self.gt_reward_arr = self.calculate_score(self.cfg, self.dcrnn, x_train, y_train, self.action_space)
         if(self.actions_made == 0):
             print("reward stats: mean = {}, median = {}, max = {}".format(
-                torch.mean(self.gt_reward_arr), torch.median(self.gt_reward_arr), torch.max(self.gt_reward_arr)))
+                np.round(torch.mean(self.gt_reward_arr),3), 
+                np.round(torch.median(self.gt_reward_arr),3), 
+                np.round(torch.max(self.gt_reward_arr),3))
+            )
         
         selected_param = self.action_space[action_idx]
         #observation = self.scenario_dict
         observation = self.dict_to_state(self.context_pts, self.target_pts, self.latent_variable) #convert from dictionary to vector(RL state has to be a flattened vector)
-        reward = self.gt_reward_arr[action_idx]*self.reward_penalty**(self.actions_made)
+        #reward = self.gt_reward_arr[action_idx]*self.reward_penalty**(self.actions_made)
+        reward = self.reward_rank_arr[action_idx]
         self.actions_made +=1
         done = self.actions_made >= self.MAX_ACTIONS
-        print('data_num = {}, actions_made = {}, action = {}, reward = {}'.format(self.dataset_idx, self.actions_made, action_idx, reward))
-        print('done = ', done)
-        info = {"selected_param": selected_param, "gt_reward_arr": self.gt_reward_arr.flatten()}
+        if(self.actions_made % 10 ==0):
+            print('data_num = {}, actions_made = {}, action = {}, reward = {}'.format(self.dataset_idx, self.actions_made, action_idx, np.round(reward.item(), 3)))
+        #print('done = ', done)
+        info = {"selected_param": selected_param, "gt_reward_arr": self.reward_rank_arr.flatten()}
         
         return observation, reward, done, info
 
@@ -116,7 +125,6 @@ class Game():
         
         observation = self.dict_to_state(self.context_pts, self.target_pts, self.latent_variable)
         self.actions_made = 0
-        print('reset game - observation shape = {}'.format(observation.shape))
         return observation
     
     def dict_to_state(self, context_pts, target_pts, latent_variable):

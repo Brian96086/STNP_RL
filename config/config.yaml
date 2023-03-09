@@ -21,11 +21,11 @@ TRAIN:
   epoch_iters: 500
   n_display: 500
   patience: 5000
-  device: "cpu"
+  device: "cuda:0"
   
   max_actions: 25
-  update_every_n_steps: 20
-  learning_iterations: 40
+  update_every_n_steps: 100
+  learning_iterations: 150
   reward_penalty: 1.0
   
 

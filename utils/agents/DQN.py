@@ -14,13 +14,14 @@ from utils.trainer.Replay_Buffer import Replay_Buffer
 class DQN(Base_Agent):
     """A deep Q learning agent"""
     agent_name = "DQN"
-    def __init__(self, config, cfg, env, action_mask):
-        Base_Agent.__init__(self, config, cfg, env, action_mask)
+    def __init__(self, config, cfg, env, action_mask, device):
+        Base_Agent.__init__(self, config, cfg, env, action_mask, device)
         self.memory = Replay_Buffer(self.hyperparameters["buffer_size"], self.hyperparameters["batch_size"], config.seed, self.device)
-        self.q_network_local = Q_predictor(cfg)
+        self.q_network_local = Q_predictor(cfg).to(device)
         self.q_network_optimizer = optim.Adam(self.q_network_local.parameters(),
                                               lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.exploration_strategy = Epsilon_Greedy_Exploration(config)
+        self.epsilon = cfg.TRAIN.epsilon
         self.mask_init = action_mask.reshape(-1,1)
         self.mask = self.mask_init.copy()
         self.action_idx_ls = []
@@ -39,6 +40,7 @@ class DQN(Base_Agent):
             if self.time_for_q_network_to_learn():
                 for _ in range(self.hyperparameters["learning_iterations"]):
                     self.learn()
+                print('curr_loss = {}'.format(self.curr_loss))
             self.save_experience()
             self.state = self.next_state #this is to set the state for the next iteration
             self.global_step_number += 1
@@ -56,15 +58,17 @@ class DQN(Base_Agent):
         with torch.no_grad():
             action_values = self.q_network_local(state)
             action_values = action_values * (1-self.mask)
-            print('max action = {}'.format(np.argmax(action_values)))
+        print('masked max value = {}, min_value = {}'.format(torch.max(action_values), torch.min(action_values)))
         self.q_network_local.train() #puts network back in training mode
 #         action = self.exploration_strategy.perturb_action_for_exploration_purposes(
 #             {"action_values": action_values,
 #              "turn_off_exploration": self.turn_off_exploration,
 #              "episode_number": self.episode_number}
 #         )
-        if(random.random() < 0.05):
+        if(random.random() > self.epsilon):
             action = np.random.randint(0, 270)
+            while(self.mask[action]==1):
+                action = np.random.randint(0, 270)
         else:
             action = torch.argmax(action_values).item()
         self.logger.info("Q values {} -- Action chosen {}".format(action_values, action))
@@ -75,6 +79,7 @@ class DQN(Base_Agent):
         if experiences is None: states, actions, rewards, next_states, dones = self.sample_experiences() #Sample experiences
         else: states, actions, rewards, next_states, dones = experiences
         loss = self.compute_loss(states, next_states, rewards, actions, dones)
+        self.curr_loss = loss
 
         actions_list = [action_X.item() for action_X in actions ]
 
