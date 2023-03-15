@@ -7,12 +7,12 @@ class Q_predictor(nn.Module):
     def __init__(self, cfg):
         super().__init__()
 #         #given x_c, y_c, z, we find the representation for STNP p
-#         self.conv_gt = nn.Conv1d(1, 128, 3, stride=1, padding = 1)
-#         self.compress_gt = nn.Sequential(
-#             nn.Linear(128, 64),
-#             nn.ReLU(),
-#             nn.Linear(64,1),
-#         )
+        self.conv_gt = nn.Conv1d(1, 128, 3, stride=1, padding = 1)
+        self.compress_gt = nn.Sequential(
+            nn.Linear(128, 64),
+            nn.ReLU(),
+            nn.Linear(64,1),
+        )
 #         self.conv_ypred = nn.Conv1d(1, 128, 3, stride=1, padding = 1)
 #         self.compress_ypred = nn.Sequential(
 #             nn.Linear(128, 64),
@@ -89,15 +89,25 @@ class Q_predictor(nn.Module):
 
 #         )
 
-        self.z_conv = nn.Sequential(
-#             nn.Linear(8, 32),
+        self.encode_p = nn.Sequential(
+            nn.Linear(110, 256),
+            nn.Sigmoid(),
+            nn.Linear(256, 512),
+            nn.Sigmoid(),
+            nn.Linear(512, 384),
+            nn.Sigmoid(),
+            nn.Linear(384, 270)
+            
+#             nn.Linear(110, 192),
 #             nn.LeakyReLU(),
-#             nn.Linear(32, 128),
-#             nn.LeakyReLU(),
-#             nn.Linear(128, 256),
+#             nn.Linear(192, 256),
 #             nn.LeakyReLU(),
 #             nn.Linear(256, 270)
-            nn.Linear(110, 192),
+        )
+        
+        #old q
+        self.encode_q = nn.Sequential(
+            nn.Linear(111, 192),
             nn.LeakyReLU(),
             nn.Linear(192, 256),
             nn.LeakyReLU(),
@@ -110,7 +120,8 @@ class Q_predictor(nn.Module):
         #TODO: check when batch changes
         x = x.reshape(-1,1)
         
-        state_arr, ct_shape, tgt_shape  = torch.split(x, [x.shape[0]-4, 2, 2], dim = 0)
+        action_token, state_arr, ct_shape, tgt_shape  = torch.split(x, [1, x.shape[0]-5, 2, 2], dim = 0)
+        #print(state_arr.shape, ct_shape,tgt_shape)
         ct_n, ct_dim = int(ct_shape[0]), int(ct_shape[1]) #context
         tgt_n, tgt_dim = int(tgt_shape[0]), int(tgt_shape[1]) #target
         z_length  = state_arr.shape[0]-ct_n*ct_dim-tgt_n*tgt_dim
@@ -119,12 +130,11 @@ class Q_predictor(nn.Module):
         t_pts = tgt_arr.reshape(tgt_n, 1, tgt_dim)
         z = z_arr.reshape(1, z_length)
         
-#         #import ipdb;ipdb.set_trace()
-#         x_c, y_c = torch.split(c_pts, [2,100], dim =2)
-#         x_t, y_t, y_t_pred = torch.split(t_pts, [2, 100,100], dim = 2) 
+        x_c, y_c = torch.split(c_pts, [2,100], dim =2)
+        x_t, y_t, y_t_pred = torch.split(t_pts, [2, 100,100], dim = 2) 
 #         y_c = self.conv_gt(y_c)
-#         y_t, y_t_pred = self.conv_gt(y_t), self.conv_ypred(y_t_pred) #use three convolutions, or try using 1 conv on both p,q
-#         y_c, y_t, y_t_pred = self.compress_gt(y_c.permute(0, 2, 1)), self.compress_gt(y_t.permute(0, 2, 1)), self.compress_ypred(y_t_pred.permute(0, 2, 1)) # n_pts x feat_dim x 1
+#         y_t, y_t_pred = self.conv_gt(y_t), self.conv_gt(y_t_pred) #use three convolutions, or try using 1 conv on both p,q
+#         y_c, y_t, y_t_pred = self.compress_gt(y_c.permute(0, 2, 1)), self.compress_gt(y_t.permute(0, 2, 1)), self.compress_gt(y_t_pred.permute(0, 2, 1)) # n_pts x feat_dim x 1
 #         c_pts = torch.cat([x_c.permute(1,0,2), y_c.permute(2, 0, 1)], dim = 2) # 1 x n_pts x feat_dim
 #         t_pts = torch.cat([x_t.permute(1,0,2), y_t.permute(2, 0, 1)-y_t_pred.permute(2, 0, 1)], dim = 2) # 1 x n_pts x feat_dim
         
@@ -147,11 +157,39 @@ class Q_predictor(nn.Module):
 #         #q_pred outputs the final q-values
 #         q_pred = self.agg_qp(cat_feat)
 #         q_pred = nn.Softmax()(q_pred*0.1)
-        q_pred = self.z_conv(torch.cat([c_pts.permute(1,0,2), torch.tile(z, (1, c_pts.shape[0], 1))], dim = 2))
-        q_pred = torch.mean(q_pred, dim = 1).reshape(-1,1)
+
+#         enc_feat = torch.cat([c_pts.permute(1,0,2), torch.tile(z, (1, c_pts.shape[0], 1))], dim = 2)
+#         enc_feat = self.encode_p(enc_feat) 
+#         enc_feat = torch.mean(enc_feat, dim = 1).reshape(-1,1) #average across context points
+
+#         y_diff = self.conv_gt(y_t-y_pred)
+#         y_t, y_t_pred = self.conv_gt(y_t), self.conv_gt(y_t_pred)
+#         y_t, y_t_pred =  self.compress_gt(y_t.permute(0, 2, 1)), self.compress_gt(y_t_pred.permute(0, 2, 1)) # n_pts x feat_dim x 1
+#         y_t, y_t_pred = y_t.permute(2,0,1), y_t_pred.permute(2,0,1)
+        #y_t, y_t_pred = y_t.permute(1,0,2), y_t_pred.permute(1,0,2)
+        t_pts = torch.cat([t_pts[:,:,:2], t_pts[:,:,102:], t_pts[:,:, 2:102]], dim = 2)
+        dec_feat = torch.cat([c_pts, t_pts[:, :, :102]], dim = 0)
+        dec_feat = torch.cat([torch.tile(action_token, (dec_feat.shape[0], 1, 1)), torch.tile(z, (dec_feat.shape[0], 1, 1)), dec_feat], dim = 2).permute(1,0,2)
+        
+        
+        #dec_feat = torch.cat([torch.tile(z, (1, t_pts.shape[0], 1)), x_t.permute(1,0,2), y_t-y_t_pred], dim = 2) # 1 x n_pts x feat_dim
+        dec_feat = self.encode_q(dec_feat) # 1 x n_tgt x feat_dim
+        dec_feat = torch.mean(dec_feat, dim = 1).reshape(-1,1) #average across target points
+        
+#         agg_feat = torch.cat([enc_feat, dec_feat], dim = 0).reshape(1,-1)
+#         agg_feat = self.agg_pq(agg_feat)
+        
+        
+        
+        
+        
+        
         #print('q_pred stats = {}'.format(torch.quantile(q_pred, q = torch.tensor([0.1, 0.3, 0.5,0.7, 0.9]))))
-        #q_pred = nn.Softmax(dim = 1)(q_pred)
-        q_pred = nn.Sigmoid()(q_pred)
+        #q_pred = nn.Sigmoid()(agg_feat)
+        q_pred = dec_feat
+        #q_pred = nn.Softmax(dim = 0)(q_pred)
+        #q_pred = (q_pred - torch.min(q_pred))/(torch.max(q_pred) - torch.min(q_pred))
+        q_pred = nn.Softmax(dim = 0)(dec_feat)
         
 
         return q_pred.reshape(-1,1)

@@ -81,9 +81,20 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
                       torch.from_numpy(x_test).float(), cfg.MODEL.z_dim)
         test_loss = N * MAE(torch.from_numpy(y_test_pred).float(),torch.from_numpy(y_test).float())/100
         
-        c_arr.append(torch.cat([x_c, y_c], dim = 1)) #n_iter, n_xc, 102
-        z_arr.append(dcrnn.z_mu_all)
-        t_arr.append(torch.cat([x_t, y_t, y_pred], dim = 1))
+        if(t%200 == 0):
+            c_arr.append(torch.cat([x_c, y_c], dim = 1)) #n_iter, n_xc, 102
+            z_arr.append(dcrnn.z_mu_all)
+            t_arr.append(torch.cat([x_t, y_t, y_pred], dim = 1))
+            checkpoint_path = "results/stnp_{}.pth".format(t)
+            torch.save({
+                'model': dcrnn.state_dict(),
+                'optimizer': opt.state_dict(),
+                #'epoch': epoch,
+                'config': cfg,
+                'sample_z':[dcrnn.zs],
+                #'loss': loss_list,
+                #'val_mae': val_mae_list
+            }, checkpoint_path)
         
         val_arr.append(torch.from_numpy(y_val_pred))
         test_arr.append(torch.from_numpy(y_test_pred))
@@ -96,6 +107,7 @@ def train(dcrnn, opt, cfg, n_epochs, x_train, y_train, x_val, y_val, x_test, y_t
             train_losses.append(train_loss.item())
             val_losses.append(val_loss.item())
             test_losses.append(test_loss.item())
+            
             # mae_losses.append(mae_loss.item())
             # kld_losses.append(kld_loss.item())
 
@@ -300,25 +312,8 @@ def train_DQN(dqn, dcrnn, beta_epsilon_all, scenarios, config, cfg, episodes):
 
     #context_pts, zs, target_pts = scenarios 
     n_c = context_pts.shape[0]
-    trainer = Trainer(config, cfg, [dqn])
+    trainer = Trainer(config, cfg, [dqn], episodes)
     trainer.run_games_for_agents()
 
-    #stack x_c and y_c -> (n_c, 102) (n_c data points, 102 features)
-    #each z captures the representation of x_c, y_c -> stack with z (n_c, 103) 
-
-    # input_feat = torch.cat([context_pts, z], dim = 1)
-    # for t in range(episodes):
-    #     q_values = dqn.forward(input_feat)
-    #     q_values = q_values * mask
-    #     max_ind = np.argmax(q_values)
-    #     best_param = q_values[max_ind]
-    #     mask[best_param] = 0
-    #     reward = env.step(best_param)
-        
-    
-
-    # (x_ct, y_ct, x_t, y_t, z)
-    #
-    
     return None
     

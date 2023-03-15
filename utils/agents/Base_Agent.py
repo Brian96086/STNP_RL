@@ -30,7 +30,7 @@ class Base_Agent(object):
         self.state_size =  config.state_size
         self.hyperparameters = config.hyperparameters
         self.average_score_required_to_win = self.get_score_required_to_win()
-        self.rolling_score_window = 100
+        self.rolling_score_window = cfg.TRAIN.rolling_window
         # self.max_steps_per_episode = self.environment.spec.max_episode_steps
         self.total_episode_score_so_far = 0
         self.game_full_episode_scores = []
@@ -132,7 +132,6 @@ class Base_Agent(object):
         if num_episodes is None: num_episodes = self.config.num_episodes_to_run
         start = time.time()
         while self.episode_number < num_episodes:
-            print('epsiode = {}'.format(self.episode_number))
             if self.config.save_model and self.episode_number % 5 ==0: 
                 self.locally_save_policy()
             self.reset_game()
@@ -142,6 +141,8 @@ class Base_Agent(object):
         time_taken = time.time() - start
         if show_whether_achieved_goal: self.show_whether_achieved_goal()
         if self.config.save_model: self.locally_save_policy()
+#         print('full results'+'&'*25)
+#         print(self.rolling_results)
         return self.game_full_episode_scores, self.rolling_results, time_taken
 
     def conduct_action(self, action):
@@ -151,22 +152,29 @@ class Base_Agent(object):
         self.mask[action] = 1
         self.action_idx_ls.append(self.action)
         if(self.done):
+            reward_dict = info["reward_dict"]
             reward_arr = info["gt_reward_arr"].numpy()
             sorted_ind = np.argsort(reward_arr.copy()) #get indices of top rewards, argsort is in ascending order
             sorted_rewards = reward_arr[sorted_ind]
+            
             weights = self.reward_penalty**(np.arange(24, -1, -1)) #depends on total number of actions per game
             weighted_rewards= sorted_rewards[-25:]*weights
             top_twenty_union = np.intersect1d(self.action_idx_ls, sorted_ind[-20:])
             top_ten_union = np.intersect1d(self.action_idx_ls, sorted_ind[-10:])
             
 #             self.action_idx_ls = torch.tensor(self.action_idx_ls)
-            top_chosen_rewards = np.sort(reward_arr[self.action_idx_ls])[-10:]
-            print('ACTION LIST - DQN = {}'.format(self.action_idx_ls))
-            print('GT TOP 20 IDX = {}'.format(sorted_ind[-20:]))
-            print('DQN - top 10 chosen rewards = ', np.round(top_chosen_rewards, 3))
-            print('GT - top 10 rewards = {},'.format(np.round(sorted_rewards[-10:], 3)))
-            print('DQN - top_twenty_union = {}, top_ten_union = {}'.format(len(top_twenty_union),len(top_ten_union))) 
-            print('OVERALL - gt_weighted reward = {}, chosen sum = {}'.format(np.round(sum(weighted_rewards),3), np.round(self.total_episode_score_so_far.item(), 3)))
+            if(self.episode_number % 20 == 0):
+                top_chosen_rewards = np.sort(reward_arr[self.action_idx_ls])[-10:]
+                reward_rank = [reward_dict[action] for action in self.action_idx_ls]
+                print('20 SELECTED REWARD SEQ = {}'.format(reward_rank))
+                print('ACTION LIST - DQN = {}'.format(self.action_idx_ls))
+                print('GT TOP 20 IDX = {}'.format(sorted_ind[-20:]))
+                print('DQN - top 10 chosen rewards = ', np.round(top_chosen_rewards, 3))
+                print('GT - top 10 rewards = {},'.format(np.round(sorted_rewards[-10:], 3)))
+                print('DQN - top_twenty_union = {}, top_ten_union = {}'.format(len(top_twenty_union),len(top_ten_union))) 
+                print('OVERALL - gt_weighted reward = {}, chosen sum = {}, chosen mean = {}'.format(
+                    np.round(sum(weighted_rewards),3), np.round(self.total_episode_score_so_far.item(), 3),
+                    np.round(self.total_episode_score_so_far.item()/len(self.action_idx_ls), 3)))
             
                   
         if self.hyperparameters["clip_rewards"]: self.reward =  max(min(self.reward, 1.0), -1.0)
@@ -176,7 +184,8 @@ class Base_Agent(object):
     def save_and_print_result(self):
         """Saves and prints results of the game"""
         self.save_result()
-        self.print_rolling_result()
+        if(self.episode_number % 5 ==0):
+            self.print_rolling_result()
 
     def save_result(self):
         """Saves the result of an episode of the game"""

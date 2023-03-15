@@ -26,15 +26,14 @@ import utils
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-device = torch.device("cpu")
+device = torch.device("cuda:0")
 
 def main(args):
+    #device = torch.device(cfg.TRAIN.device)
     num_simulations = cfg.SIMULATOR.num_simulations
     seir_data = build_dataset(cfg)
     [beta_epsilon_all, beta_epsilon_train, beta_epsilon_val, beta_epsilon_test] =  seir_data[0]
     [x_all, yall_set, y_all], [x_val, yval_set, y_val], [x_test, ytest_set, y_test] = seir_data[1:]
-
 
     np.random.seed(3)
     mask_init = np.zeros(len(beta_epsilon_all))
@@ -74,7 +73,7 @@ def main(args):
             temp_dcrnn = DCRNNModel(x_dim, y_dim, r_dim, z_dim, device=device).to(device)
             temp_opt = torch.optim.Adam(temp_dcrnn.parameters(), cfg.MODEL.lr) #1e-3
             train_losses, val_losses, test_losses, z_mu, z_logvar, scenario_dict = train(
-                    temp_dcrnn, temp_opt, cfg, int(cfg.TRAIN.stnp_epoch/5) ,x_train,
+                    temp_dcrnn, temp_opt, cfg, cfg.TRAIN.stnp_epoch ,x_train,
                     y_train,x_val, y_val, x_test, y_test,cfg.TRAIN.n_display, cfg.TRAIN.patience,
                     beta_epsilon_all=beta_epsilon_all
             )
@@ -88,23 +87,41 @@ def main(args):
 
 
         # np.save('y_all.npy',y_all)
+        
         # np.save('y_test.npy',y_test)
         env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 0)
+#         validation_env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 1000)
+        
         dqn = DQN(config, cfg, env, mask_init, device)
-        for i in range(len(scenario_dict["context_pts"]), -1, -1):
-            env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = i)
-            dqn.env = env
-            train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = cfg.TRAIN.episode)
-            checkpoint_path = "results/dqn_ckpt_{}.pth".format(i)
-            if(i%20):
-                torch.save({
-                    'model': dqn.q_network_local.state_dict(),
-                    'optimizer': dqn.q_network_optimizer.state_dict(),
-                    #'epoch': epoch,
-                    'config': cfg,
-                    #'loss': loss_list,
-                    #'val_mae': val_mae_list
-                }, checkpoint_path)
+        n_scenarios = len(scenario_dict["context_pts"])
+        gap_ratio = 1
+        num_runs = 2
+        for k in range(num_runs):
+            for i in range(n_scenarios-1, 10, int(-1*gap_ratio)): 
+    #             if(i% 10 == 0 and i!=0):
+    #                 print('_'*10 + "VALIDATION" + '_'*10)
+    #                 env.update_data_idx(2)
+    #                 dqn.episode_number = 0
+    #                 train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = 1)
+    #                 print('_'*10 + "END OF VALIDATION" + '_'*10)
+
+                print('*'*30 + "DATA_IDX = "+str(i)+'*'*30)    
+                env.update_data_idx(i)
+                #dqn.reset_game()
+                dqn.episode_number = 0
+                train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = cfg.TRAIN.episode)
+                checkpoint_path = "results/dqn_ckpt_{}.pth".format(i)
+                if(i%20):
+                    torch.save({
+                        'model': dqn.q_network_local.state_dict(),
+                        'optimizer': dqn.q_network_optimizer.state_dict(),
+                        #'epoch': epoch,
+                        'config': cfg,
+                        #'loss': loss_list,
+                        #'val_mae': val_mae_list
+                    }, checkpoint_path)
+                print('*'*60 + '\n')
+            #exit()
         exit()
 
 
@@ -218,10 +235,10 @@ class Config(object):
         self.requirements_to_solve_game = None
         self.num_episodes_to_run = None
         self.file_to_save_data_results = None
-        self.file_to_save_results_graph = None
+        self.file_to_save_results_graph = "results/rewards.png"
         self.runs_per_agent = None
         self.visualise_overall_results = None
-        self.visualise_individual_results = None
+        self.visualise_individual_results = True
         self.hyperparameters = None
         self.use_GPU = None
         self.overwrite_existing_results_file = None
@@ -243,7 +260,7 @@ def build_config_dict(cfg, num_actions):
     config.visualise_overall_agent_results = True
     config.standard_deviation_results = 1.0
     config.runs_per_agent = 1
-    config.use_GPU = False
+    config.use_GPU = cfg.TRAIN.device[:4] == "cuda"
     config.overwrite_existing_results_file = False
     config.randomise_random_seed = True
     config.save_model = True
@@ -288,8 +305,11 @@ if __name__ == '__main__':
     cfg.merge_from_file(args.cfg)
     
     cfg.DIR.output_dir = os.path.join(cfg.DIR.snapshot, cfg.DIR.exp)
+    cfg.DIR.data_dir = "results"
     if not os.path.exists(cfg.DIR.output_dir):
-        os.mkdir(cfg.DIR.output_dir)    
+        os.mkdir(cfg.DIR.output_dir)
+    if not os.path.exists(cfg.DIR.data_dir):
+        os.mkdir(cfg.DIR.data_dir)
 
     cfg.TRAIN.resume = os.path.join(cfg.DIR.output_dir, cfg.TRAIN.resume)
     cfg.VAL.resume = os.path.join(cfg.DIR.output_dir, cfg.VAL.resume)

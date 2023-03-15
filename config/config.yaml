@@ -14,19 +14,25 @@ MODEL:
   backbone: "deepQ"
 
 TRAIN:
-  episode: 300
+  episode: 150
   resume: "checkpoint_000000"
-  stnp_epoch: 2000
+  stnp_epoch: 20000
   train_iter: 8
-  epoch_iters: 500
+  epoch_iters: 200
   n_display: 500
   patience: 5000
   device: "cuda:0"
   
-  max_actions: 25
+  dqn_lr: 0.001
+  max_actions: 15
   update_every_n_steps: 100
   learning_iterations: 150
+  buffer_size: 4000
+#   update_every_n_steps: 4000
+#   learning_iterations: 3500
+  gradient_clipping_norm: 2.0
   reward_penalty: 1.0
+  epsilon: 0.95
   
 
 VAL:
