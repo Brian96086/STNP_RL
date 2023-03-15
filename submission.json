@@ -2,5 +2,5 @@
     "dockerhub-id": "brian9wang/stnp_rl:latest",
     "build-script": "python3 main.py",
     "DockerHub Repository": "brian9wang/stnp_rl",
-    "GitHub Repository": "https://github.com/Brian96086/STNP_RL.git",
+    "GitHub Repository": "https://github.com/Brian96086/STNP_RL.git"
 }

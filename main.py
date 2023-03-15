@@ -26,7 +26,7 @@ import utils
 
 
 # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-device = torch.device("cuda:0")
+device = torch.device("cpu")
 
 def main(args):
     #device = torch.device(cfg.TRAIN.device)

@@ -21,7 +21,7 @@ TRAIN:
   epoch_iters: 200
   n_display: 500
   patience: 5000
-  device: "cuda:0"
+  device: "cpu"
   
   dqn_lr: 0.001
   max_actions: 15
