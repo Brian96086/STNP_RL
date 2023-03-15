@@ -81,14 +81,6 @@ def main(args):
             torch.save(scenario_dict, data_path)
         else:
             scenario_dict = torch.load(data_path)
-            
-        
-
-
-
-        # np.save('y_all.npy',y_all)
-        
-        # np.save('y_test.npy',y_test)
         env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 0)
 #         validation_env = Game(cfg = cfg, dcrnn = temp_dcrnn,action_space = beta_epsilon_all, scenario_dict = scenario_dict, dataset_idx = 1000)
         
@@ -98,13 +90,6 @@ def main(args):
         num_runs = 2
         for k in range(num_runs):
             for i in range(n_scenarios-1, 10, int(-1*gap_ratio)): 
-    #             if(i% 10 == 0 and i!=0):
-    #                 print('_'*10 + "VALIDATION" + '_'*10)
-    #                 env.update_data_idx(2)
-    #                 dqn.episode_number = 0
-    #                 train_DQN(dqn, temp_dcrnn, beta_epsilon_all, scenarios = scenario_dict, config=config, cfg=cfg, episodes = 1)
-    #                 print('_'*10 + "END OF VALIDATION" + '_'*10)
-
                 print('*'*30 + "DATA_IDX = "+str(i)+'*'*30)    
                 env.update_data_idx(i)
                 #dqn.reset_game()
@@ -123,11 +108,6 @@ def main(args):
                 print('*'*60 + '\n')
             #exit()
         exit()
-
-
-        
-
-
         y_pred_test_list = []
         y_pred_all_list = []
         all_mae_matrix_list = []
@@ -189,43 +169,6 @@ def main(args):
             x_train, y_train, selected_mask = select_data(cfg, x_train, y_train, beta_epsilon_all, yall_set, score_array, selected_mask)
             end_time = time.time()
             print('data selection = {}'.format(end_time - start_time))
-
-        y_pred_all_arr = np.stack(y_pred_all_list,0)
-        y_pred_test_arr = np.stack(y_pred_test_list,0)
-        all_mae_matrix_arr = np.stack(all_mae_matrix_list,0)
-        all_mae_arr = np.stack(all_mae_list,0)
-        test_mae_arr = np.stack(test_mae_list,0)
-        score_arr = np.stack(score_list,0)
-        mask_arr = np.stack(mask_list,0)
-
-        ypred_allset.append(y_pred_all_arr)
-        ypred_testset.append(y_pred_test_arr)
-        maemetrix_allset.append(all_mae_matrix_arr)
-        mae_allset.append(all_mae_arr)
-        mae_testset.append(test_mae_arr)
-        score_set.append(score_arr)
-        mask_set.append(mask_arr)
-
-    ypred_allarr = np.stack(ypred_allset,0)
-    ypred_testarr = np.stack(ypred_testset,0) 
-    maemetrix_allarr = np.stack(maemetrix_allset,0) 
-    mae_allarr = np.stack(mae_allset,0)
-    mae_testarr = np.stack(mae_testset,0)
-    score_arr = np.stack(score_set,0)
-    mask_arr = np.stack(mask_set,0)
-
-    # np.save('mae_testarr.npy',mae_testarr)
-    # np.save('mae_allarr.npy',mae_allarr)
-    # np.save('maemetrix_allarr.npy',maemetrix_allarr)
-
-    # np.save('score_arr.npy',score_arr)
-    # np.save('mask_arr.npy',mask_arr)
-
-    # np.save('y_pred_all_arr.npy',ypred_allarr)
-    # np.save('y_pred_test_arr.npy',ypred_testarr)
-
-    # np.save('y_all.npy',y_all)
-    # np.save('y_test.npy',y_test)
 
 class Config(object):
     """Object to hold the config requirements for an agent/game"""
