@@ -22,14 +22,14 @@ class DQN(Base_Agent):
                                               lr=self.hyperparameters["learning_rate"], eps=1e-4)
         self.exploration_strategy = Epsilon_Greedy_Exploration(config)
         self.epsilon = cfg.TRAIN.epsilon
-        self.mask_init = action_mask.reshape(-1,1)
-        self.mask = self.mask_init.copy()
+        self.mask_init = torch.tensor(action_mask.reshape(-1,1)).to(device)
+        self.mask = torch.clone(self.mask_init)
         self.action_idx_ls = []
 
     def reset_game(self):
         super(DQN, self).reset_game()
         self.update_learning_rate(self.hyperparameters["learning_rate"], self.q_network_optimizer)
-        self.mask = self.mask_init.copy()
+        self.mask = torch.clone(self.mask_init)
         self.action_idx_ls = []
 
     def step(self):
@@ -58,7 +58,12 @@ class DQN(Base_Agent):
         with torch.no_grad():
             action_values = self.q_network_local(state)
             action_values = action_values * (1-self.mask)
-        print('masked max value = {}, min_value = {}'.format(torch.max(action_values), torch.min(action_values)))
+        if(self.episode_number % 10 ==0 and len(self.action_idx_ls) == 1):
+            print('masked-Q max = {}, min = {}, med = {}, std = {}, full_ratio = {}'.format(
+                np.round(torch.max(action_values).cpu(), 3), np.round(torch.min(action_values).cpu(),3), 
+                np.round(torch.median(action_values).cpu(),3), np.round(torch.std(action_values).cpu(),3),
+                np.round(torch.mean((action_values == 1).float()).cpu(),3)
+            ))
         self.q_network_local.train() #puts network back in training mode
 #         action = self.exploration_strategy.perturb_action_for_exploration_purposes(
 #             {"action_values": action_values,

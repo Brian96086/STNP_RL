@@ -7,10 +7,11 @@ import matplotlib.pyplot as plt
 
 class Trainer(object):
     """Runs games for given agents. Optionally will visualise and save the results"""
-    def __init__(self, config, cfg_yaml, agents):
+    def __init__(self, config, cfg_yaml, agents, episodes):
         self.config = config
         self.cfg = cfg_yaml
         self.agents = agents
+        self.num_episodes = episodes
         self.results = None
         self.colors = ["red", "blue", "green", "orange", "yellow", "purple"]
         self.colour_ix = 0
@@ -26,7 +27,9 @@ class Trainer(object):
                 agent_rolling_score_results = [results[1] for results in  self.results[agent_name]]
                 self.visualise_overall_agent_results(agent_rolling_score_results, agent_name, show_mean_and_std_range=True)
         if self.config.file_to_save_data_results: self.save_obj(self.results, self.config.file_to_save_data_results)
-        if self.config.file_to_save_results_graph: plt.savefig(self.config.file_to_save_results_graph, bbox_inches="tight")
+        if self.config.file_to_save_results_graph: 
+            print('graph saved')
+            plt.savefig(self.config.file_to_save_results_graph, bbox_inches="tight")
         plt.show()
         return self.results
 
@@ -58,7 +61,7 @@ class Trainer(object):
             self.environment_name = "STNP_RL"
             print(agent.hyperparameters)
             print("RANDOM SEED " , agent_config.seed)
-            game_scores, rolling_scores, time_taken = agent.run_n_episodes()
+            game_scores, rolling_scores, time_taken = agent.run_n_episodes(num_episodes = self.num_episodes)
             print("Time taken: {}".format(time_taken), flush=True)
             self.print_two_empty_lines()
             agent_results.append([game_scores, rolling_scores, len(rolling_scores), -1 * max(rolling_scores), time_taken])

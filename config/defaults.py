@@ -67,7 +67,6 @@ _C.TRAIN.n_display = 500
 _C.TRAIN.patience = 5000
 # optimizer and learning rate
 _C.TRAIN.optimizer = "AdamW"
-_C.TRAIN.dqn_lr = 0.01
 _C.TRAIN.lr = 0.01
 # milestone
 _C.TRAIN.lr_drop = 200
@@ -84,6 +83,7 @@ _C.TRAIN.disp_iter = 20
 _C.TRAIN.start_epoch = 0
 _C.TRAIN.device = 'cpu'
 
+_C.TRAIN.dqn_lr = 0.01
 _C.TRAIN.batch_size = 1
 _C.TRAIN.buffer_size = 40000
 _C.TRAIN.epsilon = 0.95
@@ -102,6 +102,7 @@ _C.TRAIN.learning_iterations = 20
 _C.TRAIN.clip_rewards = False
 _C.TRAIN.reward_penalty = 0.95
 _C.TRAIN.max_actions = 100
+_C.TRAIN.rolling_window = 4
 
 
 # -----------------------------------------------------------------------------
