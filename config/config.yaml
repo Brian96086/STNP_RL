@@ -1,6 +1,6 @@
 DIR: 
   exp: "trainOn400"
-  snapshot: "/home/bswang/private/RL_results/stnp"
+  snapshot: "."
 
 SIMULATOR:
   population: 100000
