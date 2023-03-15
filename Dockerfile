@@ -23,4 +23,4 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Override command to disable running jupyter notebook at launch
-# CMD ["/bin/bash"]
+CMD ["/bin/bash"]

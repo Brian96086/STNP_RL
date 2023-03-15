@@ -12,3 +12,4 @@ sklearn
 matplotlib
 gpytorch
 yacs
+einops
